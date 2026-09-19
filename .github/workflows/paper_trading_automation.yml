@@ -1,0 +1,102 @@
+name: Paper Trading Automation Engine
+
+on:
+  schedule:
+    # 1. Evening Gmail Check: 12:30 UTC & 13:00 UTC (18:00 & 18:30 IST)
+    - cron: '30 12 * * *'
+    - cron: '0 13 * * *'
+    # 2. Market Hours Price & Trade Check: Every 15 minutes between 03:45 and 10:00 UTC (09:15 - 15:30 IST) Mon-Fri
+    - cron: '45 3 * * 1-5'
+    - cron: '*/15 4-9 * * 1-5'
+    - cron: '0,15,30 10 * * 1-5'
+    # 3. Market Close Daily Report: 10:15 UTC (15:45 IST) Mon-Fri
+    - cron: '15 10 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      manual_task:
+        description: 'Select Task to Run Manually'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - fetch-mail
+          - trade-cycle
+          - daily-report
+
+permissions:
+  contents: write
+
+jobs:
+  run-engine:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Determine & Execute Task
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          NOTIFICATION_RECIPIENT: ${{ secrets.NOTIFICATION_RECIPIENT }}
+          TZ: 'Asia/Kolkata'
+        run: |
+          CURRENT_HOUR=$(date +%H)
+          CURRENT_MIN=$(date +%M)
+          DAY_OF_WEEK=$(date +%u)
+          MANUAL_INPUT="${{ github.event.inputs.manual_task }}"
+
+          echo "Current IST Time: $(date)"
+          echo "Manual Input: $MANUAL_INPUT"
+
+          if [ "$MANUAL_INPUT" == "fetch-mail" ]; then
+            python scripts/cloud_runner.py --task fetch-mail
+          elif [ "$MANUAL_INPUT" == "trade-cycle" ]; then
+            python scripts/cloud_runner.py --task trade-cycle
+          elif [ "$MANUAL_INPUT" == "daily-report" ]; then
+            python scripts/cloud_runner.py --task daily-report
+          else
+            # Automated Schedule logic
+            # Evening Window (17:30 to 20:30 IST) -> fetch mail
+            if [ "$CURRENT_HOUR" -ge 17 ] && [ "$CURRENT_HOUR" -le 20 ]; then
+              echo "[+] Triggering Evening Gmail Report Fetch..."
+              python scripts/cloud_runner.py --task fetch-mail
+            fi
+
+            # Trading Hours Window (09:15 to 15:30 IST, Mon-Fri) -> trade cycle
+            if [ "$DAY_OF_WEEK" -le 5 ]; then
+              if ([ "$CURRENT_HOUR" -eq 9 ] && [ "$CURRENT_MIN" -ge 15 ]) || ([ "$CURRENT_HOUR" -ge 10 ] && [ "$CURRENT_HOUR" -le 14 ]) || ([ "$CURRENT_HOUR" -eq 15 ] && [ "$CURRENT_MIN" -le 30 ]); then
+                echo "[+] Triggering Market Hours Trade Cycle..."
+                python scripts/cloud_runner.py --task trade-cycle
+              fi
+
+              # Market Close Window (15:40 to 16:15 IST, Mon-Fri) -> send daily summary report
+              if [ "$CURRENT_HOUR" -eq 15 ] && [ "$CURRENT_MIN" -ge 40 ]; then
+                echo "[+] Triggering Daily Summary Email Report..."
+                python scripts/cloud_runner.py --task daily-report
+              fi
+            fi
+          fi
+
+      - name: Commit & Push Updated Database State
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/portfolio.db
+          if git diff --staged --quiet; then
+            echo "No database changes to commit."
+          else
+            git commit -m "Auto-update portfolio state [skip ci]"
+            git push
+          fi

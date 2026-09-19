@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Money 200 DMA Paper Trading Terminal</title>
+    <!-- Google Fonts Inter & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body class="dark-theme">
+    <div class="app-layout">
+        <!-- Top Navigation Header -->
+        <header class="top-nav" id="top-nav-bar">
+            <div class="brand-group">
+                <div class="brand-logo">
+                    <span class="logo-icon">▲</span>
+                </div>
+                <div class="brand-info">
+                    <h1 class="brand-title">SMART MONEY <span>200 DMA</span></h1>
+                    <span class="brand-subtitle">Automated Paper Trading Engine</span>
+                </div>
+            </div>
+
+            <div class="header-status-group">
+                <div class="status-badge" id="market-status-badge">
+                    <span class="pulse-dot" id="market-pulse"></span>
+                    <span id="market-status-text">Checking Market...</span>
+                </div>
+                <div class="clock-badge" id="ist-clock-badge">
+                    <span class="clock-icon">🕒</span>
+                    <span id="ist-clock-text">--:--:-- IST</span>
+                </div>
+            </div>
+
+            <div class="header-actions">
+                <button class="btn btn-primary" id="btn-run-check" title="Run manual price and trigger check cycle">
+                    <span class="btn-icon">⚡</span> Run Market Check
+                </button>
+                <button class="btn btn-secondary" id="btn-sync-email" title="Fetch latest 6 PM screening report from Gmail">
+                    <span class="btn-icon">📥</span> Sync Gmail
+                </button>
+                <button class="btn btn-secondary" id="btn-open-paste-modal" title="Paste raw email report to parse">
+                    <span class="btn-icon">📝</span> Paste Report
+                </button>
+                <button class="btn btn-icon-only" id="btn-open-settings" title="System Settings">
+                    ⚙️
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Dashboard Container -->
+        <main class="main-content">
+            <!-- Metric Overview Cards -->
+            <section class="metrics-grid" id="metrics-overview">
+                <div class="metric-card card-glow-cyan">
+                    <div class="metric-header">
+                        <span class="metric-label">Total Portfolio Value</span>
+                        <span class="metric-pill">Base: ₹1,00,000</span>
+                    </div>
+                    <div class="metric-value-row">
+                        <span class="metric-value" id="val-total-portfolio">₹1,00,000.00</span>
+                    </div>
+                    <div class="metric-subtext" id="val-total-return-container">
+                        <span class="return-indicator" id="val-total-return">+0.00%</span>
+                        <span class="subtext-muted">overall return</span>
+                    </div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-header">
+                        <span class="metric-label">Available Cash</span>
+                        <span class="metric-badge">Ready</span>
+                    </div>
+                    <div class="metric-value-row">
+                        <span class="metric-value text-cyan" id="val-cash-balance">₹1,00,000.00</span>
+                    </div>
+                    <div class="metric-subtext">
+                        <span class="subtext-muted">₹10,000 per slot (max 10)</span>
+                    </div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-header">
+                        <span class="metric-label">Invested Capital</span>
+                        <span class="metric-count" id="val-positions-count">0 / 10 Trades</span>
+                    </div>
+                    <div class="metric-value-row">
+                        <span class="metric-value" id="val-invested-capital">₹0.00</span>
+                    </div>
+                    <div class="metric-subtext">
+                        <span class="subtext-muted">Current Market Val: </span>
+                        <span class="highlight-val" id="val-positions-mkt">₹0.00</span>
+                    </div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-header">
+                        <span class="metric-label">Realized & Unrealized P&L</span>
+                        <span class="metric-badge" id="badge-pnl-status">Active</span>
+                    </div>
+                    <div class="metric-value-row">
+                        <span class="metric-value" id="val-total-pnl">₹0.00</span>
+                    </div>
+                    <div class="metric-subtext">
+                        <span class="subtext-muted">Realized: </span>
+                        <span id="val-realized-pnl" class="text-positive">₹0.00</span>
+                        <span class="subtext-muted" style="margin-left: 8px;">Unrealized: </span>
+                        <span id="val-unrealized-pnl">₹0.00</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Navigation Tabs -->
+            <div class="tab-navigation-bar">
+                <div class="tab-links">
+                    <button class="tab-link active" data-tab="tab-watchlist" id="tab-btn-watchlist">
+                        🎯 200 DMA Watchlist <span class="tab-badge" id="badge-watchlist-count">0</span>
+                    </button>
+                    <button class="tab-link" data-tab="tab-positions" id="tab-btn-positions">
+                        💼 Active Holdings <span class="tab-badge" id="badge-positions-count">0</span>
+                    </button>
+                    <button class="tab-link" data-tab="tab-trades" id="tab-btn-trades">
+                        📜 Trade History <span class="tab-badge" id="badge-trades-count">0</span>
+                    </button>
+                    <button class="tab-link" data-tab="tab-preview" id="tab-btn-preview">
+                        📧 Daily Email Report
+                    </button>
+                    <button class="tab-link" data-tab="tab-logs" id="tab-btn-logs">
+                        💻 System Audit Logs
+                    </button>
+                </div>
+                <div class="tab-actions">
+                    <button class="btn btn-sm btn-outline" id="btn-add-stock-modal">
+                        + Add Stock Manually
+                    </button>
+                    <button class="btn btn-sm btn-outline text-danger" id="btn-reset-portfolio">
+                        Reset Portfolio
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tab Content: Watchlist -->
+            <section class="tab-pane active" id="tab-watchlist">
+                <div class="card terminal-card">
+                    <div class="card-toolbar">
+                        <div class="toolbar-title">
+                            <h3>Screened Watchlist (From 6 PM Email Report)</h3>
+                            <p class="section-desc">Automated Rule: If stock moves next day above <strong>200 DMA + 1%</strong>, paper BUY order executes with ₹10,000 allocation.</p>
+                        </div>
+                        <div class="filter-group">
+                            <button class="filter-btn active" data-filter="ALL" id="filter-wl-all">All</button>
+                            <button class="filter-btn" data-filter="PENDING" id="filter-wl-pending">Pending Trigger</button>
+                            <button class="filter-btn" data-filter="TRIGGERED" id="filter-wl-triggered">Triggered</button>
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table class="data-table" id="watchlist-table">
+                            <thead>
+                                <tr>
+                                    <th>Symbol</th>
+                                    <th>Report List</th>
+                                    <th>Report CMP</th>
+                                    <th>200 DMA</th>
+                                    <th>Buy Trigger (+1%)</th>
+                                    <th>Live CMP</th>
+                                    <th>Trigger Proximity</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="watchlist-table-body">
+                                <tr>
+                                    <td colspan="9" class="table-empty">No stocks in watchlist yet. Click "Sync Gmail" or "Paste Report" to load your daily 6 PM report.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tab Content: Active Positions -->
+            <section class="tab-pane" id="tab-positions">
+                <div class="card terminal-card">
+                    <div class="card-toolbar">
+                        <div class="toolbar-title">
+                            <h3>Currently Open Holdings (Max 10 Slots)</h3>
+                            <p class="section-desc">Monitored during market hours. Automated exit triggers at <strong>-2% Stop-Loss</strong> or <strong>+5% Target</strong>.</p>
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table class="data-table" id="positions-table">
+                            <thead>
+                                <tr>
+                                    <th>Stock</th>
+                                    <th>Quantity</th>
+                                    <th>Buy Price</th>
+                                    <th>Invested</th>
+                                    <th>Live CMP</th>
+                                    <th>Stop-Loss (-2%)</th>
+                                    <th>Target (+5%)</th>
+                                    <th>Unrealized P&L</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="positions-table-body">
+                                <tr>
+                                    <td colspan="9" class="table-empty">No active open positions. When a watchlist stock triggers 200 DMA + 1%, it will appear here.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tab Content: Trade History -->
+            <section class="tab-pane" id="tab-trades">
+                <div class="card terminal-card">
+                    <div class="card-toolbar">
+                        <div class="toolbar-title">
+                            <h3>Executed Trade Log</h3>
+                            <p class="section-desc">Chronological history of paper buy entries and exits with profit & loss.</p>
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table class="data-table" id="trades-table">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Symbol</th>
+                                    <th>Type</th>
+                                    <th>Price</th>
+                                    <th>Quantity</th>
+                                    <th>Total Value</th>
+                                    <th>Realized P&L</th>
+                                    <th>Exit Reason</th>
+                                </tr>
+                            </thead>
+                            <tbody id="trades-table-body">
+                                <tr>
+                                    <td colspan="8" class="table-empty">No trade history recorded yet.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tab Content: Daily Report Preview -->
+            <section class="tab-pane" id="tab-preview">
+                <div class="card terminal-card">
+                    <div class="card-toolbar">
+                        <div class="toolbar-title">
+                            <h3>Daily Summary Email Preview</h3>
+                            <p class="section-desc">This email is automatically dispatched daily at <strong>3:45 PM IST</strong> (after market close) to your inbox.</p>
+                        </div>
+                        <div class="toolbar-actions">
+                            <button class="btn btn-primary" id="btn-send-email-now">
+                                🚀 Send This Email To My Inbox Now
+                            </button>
+                        </div>
+                    </div>
+                    <div class="email-preview-container" id="email-preview-frame-container">
+                        <iframe id="email-preview-iframe" title="Daily Email Report Preview"></iframe>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tab Content: System Logs -->
+            <section class="tab-pane" id="tab-logs">
+                <div class="card terminal-card">
+                    <div class="card-toolbar">
+                        <div class="toolbar-title">
+                            <h3>Real-Time Audit & Activity Logs</h3>
+                            <p class="section-desc">System events, Gmail connection audits, price checks, and trade executions.</p>
+                        </div>
+                        <button class="btn btn-sm btn-outline" id="btn-refresh-logs">Refresh Logs</button>
+                    </div>
+                    <div class="logs-container" id="system-logs-list">
+                        <!-- Filled by JS -->
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modals -->
+
+    <!-- Settings Modal -->
+    <div class="modal-overlay" id="modal-settings">
+        <div class="modal-content modal-md">
+            <div class="modal-header">
+                <h3>⚙️ Trading Terminal & Gmail Settings</h3>
+                <button class="modal-close" id="btn-close-settings">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="settings-form">
+                    <div class="form-section-title">Gmail Integration</div>
+                    <div class="form-group">
+                        <label for="input-gmail-user">Gmail Address</label>
+                        <input type="email" id="input-gmail-user" placeholder="yourname@gmail.com" required>
+                        <small class="form-help">The Gmail account receiving the daily 6 PM report and sending your daily summaries.</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="input-gmail-pwd">Google App Password (16 characters)</label>
+                        <input type="password" id="input-gmail-pwd" placeholder="Enter 16-character App Password">
+                        <small class="form-help">Generate in your Google Account: Security &gt; 2-Step Verification &gt; App Passwords.</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="input-mail-subject">Email Subject Filter</label>
+                        <input type="text" id="input-mail-subject" value="Daily smart money finder report">
+                    </div>
+                    <div class="form-group">
+                        <label for="input-notify-recipient">Report Notification Recipient</label>
+                        <input type="email" id="input-notify-recipient" placeholder="Leave empty to send to your Gmail address">
+                    </div>
+
+                    <div class="form-section-title">Trading & Risk Parameters</div>
+                    <div class="form-row">
+                        <div class="form-group col-6">
+                            <label for="input-total-capital">Total Capital (₹)</label>
+                            <input type="number" id="input-total-capital" value="100000" step="1000">
+                        </div>
+                        <div class="form-group col-6">
+                            <label for="input-trade-alloc">Allocation Per Trade (₹)</label>
+                            <input type="number" id="input-trade-alloc" value="10000" step="500">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-4">
+                            <label for="input-trigger-buf">Trigger Buffer (%)</label>
+                            <input type="number" id="input-trigger-buf" value="1.0" step="0.1">
+                            <small>200 DMA + 1%</small>
+                        </div>
+                        <div class="form-group col-4">
+                            <label for="input-stop-loss">Stop Loss (%)</label>
+                            <input type="number" id="input-stop-loss" value="2.0" step="0.1">
+                        </div>
+                        <div class="form-group col-4">
+                            <label for="input-target">Target (%)</label>
+                            <input type="number" id="input-target" value="5.0" step="0.1">
+                        </div>
+                    </div>
+
+                    <div class="form-group form-checkbox-group">
+                        <input type="checkbox" id="check-simulate-market">
+                        <label for="check-simulate-market">Allow Trading Execution Outside Market Hours (Simulation/Testing Mode)</label>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline" id="btn-cancel-settings">Cancel</button>
+                        <button type="submit" class="btn btn-primary" id="btn-save-settings">Save Settings</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Paste Email Report Modal -->
+    <div class="modal-overlay" id="modal-paste">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h3>📝 Paste Daily Smart Money Report</h3>
+                <button class="modal-close" id="btn-close-paste">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-desc">
+                    Paste raw text or HTML from your 6:00 PM email. The parser will automatically identify 
+                    <strong>"best for buy above 200 dma"</strong> and <strong>"best for sell below 200 dma"</strong> 
+                    sections, extract stock names, CMP, 200 DMA, and compute the +1% buying trigger point.
+                </p>
+                <div class="sample-actions">
+                    <button type="button" class="btn btn-sm btn-outline" id="btn-load-sample-mail">
+                        📋 Load Sample Indian Market Report
+                    </button>
+                </div>
+                <div class="form-group">
+                    <label for="textarea-raw-mail">Email Content (HTML or Text)</label>
+                    <textarea id="textarea-raw-mail" rows="12" placeholder="Paste email content here..."></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" id="btn-cancel-paste">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="btn-submit-paste">Parse & Add to Watchlist</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Stock Manually Modal -->
+    <div class="modal-overlay" id="modal-manual-stock">
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h3>+ Add Stock Manually</h3>
+                <button class="modal-close" id="btn-close-manual-stock">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="manual-stock-form">
+                    <div class="form-group">
+                        <label for="manual-stock-name">Stock Name / Symbol</label>
+                        <input type="text" id="manual-stock-name" placeholder="e.g. TATAMOTORS, RELIANCE" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="manual-stock-section">List Category</label>
+                        <select id="manual-stock-section">
+                            <option value="above_200_dma">Best for Buy (Above 200 DMA)</option>
+                            <option value="below_200_dma">Best for Sell (Below 200 DMA)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="manual-stock-cmp">Current Market Price (CMP ₹)</label>
+                        <input type="number" id="manual-stock-cmp" step="0.05" placeholder="e.g. 980.50" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="manual-stock-dma">200 DMA Value (₹)</label>
+                        <input type="number" id="manual-stock-dma" step="0.05" placeholder="e.g. 970.00" required>
+                        <small class="form-help">Trigger price will be automatically set at 200 DMA + 1%.</small>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline" id="btn-cancel-manual-stock">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Add to Watchlist</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Simulate Price Modal (For Testing Triggers) -->
+    <div class="modal-overlay" id="modal-simulate-price">
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h3>🧪 Simulate Market Price</h3>
+                <button class="modal-close" id="btn-close-sim-price">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-desc">Inject a test price to verify that the Buy trigger, 2% Stop-Loss, or 5% Target triggers automatically.</p>
+                <form id="simulate-price-form">
+                    <div class="form-group">
+                        <label for="sim-stock-symbol">Stock Symbol</label>
+                        <input type="text" id="sim-stock-symbol" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label for="sim-new-price">Test Price (₹)</label>
+                        <input type="number" id="sim-new-price" step="0.05" required>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline" id="btn-cancel-sim-price">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Apply Test Price</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications Container -->
+    <div id="toast-container"></div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

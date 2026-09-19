@@ -1,0 +1,18 @@
+{
+  "total_capital": 100000.0,
+  "trade_allocation": 10000.0,
+  "max_active_trades": 10,
+  "stop_loss_pct": 2.0,
+  "target_pct": 5.0,
+  "trigger_buffer_pct": 1.0,
+  "gmail_user": "your_email@gmail.com",
+  "gmail_app_password": "your_16_char_app_password",
+  "gmail_imap_server": "imap.gmail.com",
+  "gmail_smtp_server": "smtp.gmail.com",
+  "gmail_smtp_port": 587,
+  "email_report_subject": "Daily smart money finder report",
+  "notification_recipient": "",
+  "market_check_interval_seconds": 120,
+  "simulate_market_hours": false,
+  "server_port": 8000
+}
