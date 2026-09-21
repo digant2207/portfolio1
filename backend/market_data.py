@@ -104,4 +104,50 @@ def fetch_current_prices(symbols: List[str]) -> Dict[str, float]:
 
 def simulate_price_update(symbol: str, target_price: float):
     """Allows simulating a market price for test/demo purposes."""
-    _price_cache[symbol] = {"price": round(target_price, 2), "timestamp": datetime.now().timestamp() + 3600}
+    _price_cache[symbol.strip().upper()] = {"price": round(target_price, 2), "timestamp": datetime.now().timestamp() + 3600}
+
+# Volume cache with 4-hour TTL (1-month average volume changes very slowly)
+_volume_cache: Dict[str, Dict[str, Any]] = {}
+VOLUME_CACHE_TTL_SECONDS = 14400
+
+def fetch_monthly_average_volume(symbol: str) -> float:
+    """
+    Fetches the 1-month average daily trading volume for a given stock symbol using yfinance.
+    Returns average volume as float.
+    """
+    sym = symbol.strip().upper()
+    now_ts = datetime.now().timestamp()
+    
+    cached = _volume_cache.get(sym)
+    if cached and (now_ts - cached["timestamp"]) < VOLUME_CACHE_TTL_SECONDS:
+        return cached["volume"]
+        
+    try:
+        ticker = yf.Ticker(sym)
+        # Fetch 1-month daily historical data
+        hist = ticker.history(period="1mo")
+        if not hist.empty and "Volume" in hist.columns:
+            # Calculate mean of daily volumes excluding days with 0 volume
+            valid_volumes = hist["Volume"][hist["Volume"] > 0]
+            if not valid_volumes.empty:
+                avg_vol = float(valid_volumes.mean())
+                _volume_cache[sym] = {"volume": round(avg_vol, 2), "timestamp": now_ts}
+                return round(avg_vol, 2)
+        
+        # Fallback to fast_info or info if history was empty
+        fast_info = getattr(ticker, "fast_info", None)
+        if fast_info:
+            vol = getattr(fast_info, "three_month_average_volume", None) or getattr(fast_info, "ten_day_average_volume", None)
+            if vol and vol > 0:
+                avg_vol = float(vol)
+                _volume_cache[sym] = {"volume": round(avg_vol, 2), "timestamp": now_ts}
+                return round(avg_vol, 2)
+    except Exception as e:
+        log_event("WARNING", f"Could not fetch 1-month average volume for {sym}: {e}")
+        
+    return 0.0
+
+def simulate_volume_update(symbol: str, volume: float):
+    """Allows simulating stock volume for testing."""
+    _volume_cache[symbol.strip().upper()] = {"volume": float(volume), "timestamp": datetime.now().timestamp() + 3600}
+

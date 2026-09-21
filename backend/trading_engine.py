@@ -13,7 +13,7 @@ from .database import (
     get_db, log_event, get_pending_watchlist, get_open_positions,
     get_portfolio_summary, update_watchlist_price
 )
-from .market_data import is_market_open, fetch_current_prices
+from .market_data import is_market_open, fetch_current_prices, fetch_monthly_average_volume
 
 def run_trading_cycle(force_market_open: bool = False) -> Dict[str, Any]:
     """
@@ -151,6 +151,8 @@ def run_trading_cycle(force_market_open: bool = False) -> Dict[str, Any]:
     max_active = cfg.get("max_active_trades", 10)
     sl_pct = cfg.get("stop_loss_pct", 2.0)
     target_pct = cfg.get("target_pct", 5.0)
+    min_stock_price = cfg.get("min_stock_price", 20.0)
+    min_1m_avg_vol = cfg.get("min_1m_avg_volume", 10000)
 
     # 2. Evaluate Pending Watchlist for Buy Triggers (200 DMA + 1%)
     with get_db() as conn:
@@ -165,8 +167,19 @@ def run_trading_cycle(force_market_open: bool = False) -> Dict[str, Any]:
             cursor.execute("UPDATE watchlist SET current_price = ?, last_checked = CURRENT_TIMESTAMP WHERE id = ?", (cmp, item["id"]))
             trigger_price = item["trigger_price"]
             
-            # Condition: CMP >= 200 DMA + 1%
+            # Condition 1: CMP >= 200 DMA + 1%
             if cmp >= trigger_price:
+                # Condition 2: Filter out penny stocks / stocks with CMP <= min_stock_price (e.g. <= 20)
+                if cmp <= min_stock_price:
+                    log_event("WARNING", f"Trigger reached for {sym} @ ₹{cmp}, but ignored: CMP (₹{cmp}) is not greater than minimum required price ₹{min_stock_price}.", conn=conn)
+                    continue
+                    
+                # Condition 3: Filter out illiquid stocks where 1-month avg daily volume < min_1m_avg_vol (e.g. < 10,000)
+                avg_vol = fetch_monthly_average_volume(sym)
+                if avg_vol < min_1m_avg_vol:
+                    log_event("WARNING", f"Trigger reached for {sym} @ ₹{cmp}, but ignored: 1-month avg volume ({int(avg_vol):,}) is below required minimum of {int(min_1m_avg_vol):,} shares.", conn=conn)
+                    continue
+                
                 # Check capital & slot limit
                 if current_pos_count >= max_active:
                     log_event("WARNING", f"Trigger reached for {sym} @ ₹{cmp}, but maximum {max_active} active positions already reached.", conn=conn)

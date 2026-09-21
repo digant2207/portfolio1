@@ -20,6 +20,8 @@ DEFAULT_CONFIG = {
     "stop_loss_pct": 2.0,       # 2% stop loss
     "target_pct": 5.0,          # 5% minimum target
     "trigger_buffer_pct": 1.0,  # 200 DMA + 1%
+    "min_stock_price": 20.0,    # Ignore stocks with CMP <= 20
+    "min_1m_avg_volume": 10000, # Ignore stocks with 1-month avg volume < 10,000
     
     # Gmail Configuration
     "gmail_user": "",

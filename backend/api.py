@@ -49,6 +49,8 @@ class SettingsUpdate(BaseModel):
     stop_loss_pct: Optional[float] = None
     target_pct: Optional[float] = None
     trigger_buffer_pct: Optional[float] = None
+    min_stock_price: Optional[float] = None
+    min_1m_avg_volume: Optional[int] = None
     simulate_market_hours: Optional[bool] = None
 
 class RawMailInput(BaseModel):

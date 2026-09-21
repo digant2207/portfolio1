@@ -512,6 +512,8 @@ function initModals() {
             document.getElementById("input-trigger-buf").value = cfg.trigger_buffer_pct || 1.0;
             document.getElementById("input-stop-loss").value = cfg.stop_loss_pct || 2.0;
             document.getElementById("input-target").value = cfg.target_pct || 5.0;
+            document.getElementById("input-min-price").value = cfg.min_stock_price !== undefined ? cfg.min_stock_price : 20.0;
+            document.getElementById("input-min-vol").value = cfg.min_1m_avg_volume !== undefined ? cfg.min_1m_avg_volume : 10000;
             document.getElementById("check-simulate-market").checked = !!cfg.simulate_market_hours;
             
             el.modalSettings.classList.add("active");
@@ -536,6 +538,8 @@ function initModals() {
             trigger_buffer_pct: parseFloat(document.getElementById("input-trigger-buf").value),
             stop_loss_pct: parseFloat(document.getElementById("input-stop-loss").value),
             target_pct: parseFloat(document.getElementById("input-target").value),
+            min_stock_price: parseFloat(document.getElementById("input-min-price").value),
+            min_1m_avg_volume: parseInt(document.getElementById("input-min-vol").value, 10),
             simulate_market_hours: document.getElementById("check-simulate-market").checked
         };
         
