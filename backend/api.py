@@ -44,6 +44,8 @@ class SettingsUpdate(BaseModel):
     gmail_app_password: Optional[str] = None
     email_report_subject: Optional[str] = None
     notification_recipient: Optional[str] = None
+    telegram_bot_token: Optional[str] = None
+    telegram_chat_id: Optional[str] = None
     total_capital: Optional[float] = None
     trade_allocation: Optional[float] = None
     stop_loss_pct: Optional[float] = None
@@ -130,10 +132,12 @@ def api_get_logs():
 @app.get("/api/settings")
 def api_get_settings():
     cfg = load_config()
-    # Mask password
+    # Mask secrets
     masked = cfg.copy()
     if masked.get("gmail_app_password"):
         masked["gmail_app_password"] = "••••••••••••••••"
+    if masked.get("telegram_bot_token"):
+        masked["telegram_bot_token"] = "••••••••••••••••"
     return masked
 
 @app.post("/api/settings")
@@ -141,9 +145,27 @@ def api_save_settings(settings: SettingsUpdate):
     data = {k: v for k, v in settings.model_dump().items() if v is not None}
     if data.get("gmail_app_password") == "••••••••••••••••":
         del data["gmail_app_password"]
+    if data.get("telegram_bot_token") == "••••••••••••••••":
+        del data["telegram_bot_token"]
     saved = save_config(data)
     log_event("INFO", "Settings updated successfully.")
     return {"success": True, "settings": saved}
+
+@app.post("/api/actions/test-telegram")
+def api_test_telegram():
+    from .notifier import send_telegram_message
+    from datetime import datetime
+    time_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    test_msg = (
+        "🤖 <b>Paper Trading Terminal - Telegram Test</b>\n"
+        "━━━━━━━━━━━━━━━━━━\n"
+        "✅ <b>Telegram connection verified successfully!</b>\n"
+        f"⏰ <b>Time:</b> {time_str}\n"
+        "━━━━━━━━━━━━━━━━━━\n"
+        "<i>You will receive instant alerts for every Buy order, Target (+5%), and Stop-Loss (-2%) exit.</i>"
+    )
+    success, msg = send_telegram_message(test_msg)
+    return {"success": success, "message": msg}
 
 @app.post("/api/actions/fetch-mail")
 def api_action_fetch_mail():

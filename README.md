@@ -55,6 +55,8 @@ To allow GitHub Actions to securely read your Gmail and send reports:
 | `GMAIL_USER` | `your.email@gmail.com` |
 | `GMAIL_APP_PASSWORD` | `abcdefghijklmnop` *(Your 16-character Google App Password)* |
 | `NOTIFICATION_RECIPIENT` | *(Optional)* Email where daily summaries should be sent. |
+| `TELEGRAM_BOT_TOKEN` | *(Optional)* Bot Token from `@BotFather` for instant trade alerts. |
+| `TELEGRAM_CHAT_ID` | *(Optional)* Your Telegram user ID or group ID. |
 
 > 🔒 **Security**: GitHub Secrets are encrypted and never exposed in code or public logs.
 

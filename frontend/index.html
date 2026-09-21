@@ -312,9 +312,21 @@
                         <label for="input-mail-subject">Email Subject Filter</label>
                         <input type="text" id="input-mail-subject" value="Daily smart money finder report">
                     </div>
+                    <div class="form-section-title">Telegram Instant Trade Alerts</div>
                     <div class="form-group">
-                        <label for="input-notify-recipient">Report Notification Recipient</label>
-                        <input type="email" id="input-notify-recipient" placeholder="Leave empty to send to your Gmail address">
+                        <label for="input-telegram-token">Telegram Bot Token</label>
+                        <input type="password" id="input-telegram-token" placeholder="Enter Bot Token from @BotFather">
+                        <small class="form-help">Get your bot token from @BotFather on Telegram.</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="input-telegram-chat-id">Telegram Chat ID</label>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <input type="text" id="input-telegram-chat-id" placeholder="e.g. 987654321 or -100123456789" style="flex: 1;">
+                            <button type="button" class="btn btn-sm btn-outline" id="btn-test-telegram" style="white-space: nowrap;">
+                                💬 Test Telegram
+                            </button>
+                        </div>
+                        <small class="form-help">Receive instant notifications for all Buy orders, 5% Target exits, and 2% Stop-Loss hits.</small>
                     </div>
 
                     <div class="form-section-title">Trading & Risk Parameters</div>

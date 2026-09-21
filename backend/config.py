@@ -10,7 +10,15 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 CONFIG_FILE = BASE_DIR / "config.json"
 DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(exist_ok=True)
-DB_PATH = DATA_DIR / "portfolio.db"
+DEFAULT_DB_PATH = DATA_DIR / "portfolio.db"
+
+def get_db_path() -> Path:
+    env_path = os.environ.get("PORTFOLIO_DB_PATH")
+    if env_path:
+        return Path(env_path)
+    return DEFAULT_DB_PATH
+
+DB_PATH = DEFAULT_DB_PATH
 
 DEFAULT_CONFIG = {
     # Capital & Trade Management
@@ -31,6 +39,10 @@ DEFAULT_CONFIG = {
     "gmail_smtp_port": 587,
     "email_report_subject": "Daily smart money finder report",
     "notification_recipient": "",
+    
+    # Telegram Configuration
+    "telegram_bot_token": "",
+    "telegram_chat_id": "",
     
     # Engine Settings
     "market_check_interval_seconds": 120, # 2 minutes
@@ -60,6 +72,14 @@ def load_config() -> dict:
     env_recipient = os.environ.get("NOTIFICATION_RECIPIENT")
     if env_recipient:
         config["notification_recipient"] = env_recipient.strip()
+
+    env_tg_token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    if env_tg_token:
+        config["telegram_bot_token"] = env_tg_token.strip()
+
+    env_tg_chat = os.environ.get("TELEGRAM_CHAT_ID")
+    if env_tg_chat:
+        config["telegram_chat_id"] = env_tg_chat.strip()
         
     env_port = os.environ.get("PORT")
     if env_port:

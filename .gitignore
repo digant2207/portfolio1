@@ -19,3 +19,4 @@ config.json
 Thumbs.db
 *.db-shm
 *.db-wal
+*test_portfolio.db*

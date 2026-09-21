@@ -210,6 +210,22 @@ def parse_email_html_or_text(html_content: str, text_content: str = "") -> List[
                         
     return results
 
+def decode_mime_words(raw_header: str) -> str:
+    """Properly decodes multi-part RFC 2047 MIME encoded headers."""
+    if not raw_header:
+        return ""
+    try:
+        decoded_parts = decode_header(raw_header)
+        res = []
+        for text, enc in decoded_parts:
+            if isinstance(text, bytes):
+                res.append(text.decode(enc or "utf-8", errors="ignore"))
+            else:
+                res.append(str(text))
+        return "".join(res)
+    except Exception:
+        return str(raw_header)
+
 def fetch_and_parse_gmail_report() -> Tuple[bool, str, List[Dict[str, Any]]]:
     """
     Connects to Gmail via IMAP SSL, searches for 'Daily smart money finder report',
@@ -235,13 +251,21 @@ def fetch_and_parse_gmail_report() -> Tuple[bool, str, List[Dict[str, Any]]]:
         # Search query for subject
         # Note: Gmail search syntax supports SUBJECT "..."
         status, messages = mail.search(None, f'(SUBJECT "{subject_query}")')
-        if status != "OK" or not messages[0]:
-            # Try searching ALL recent and filtering in python
-            status, messages = mail.search(None, "ALL")
-            
-        msg_ids = messages[0].split()
+        msg_ids = messages[0].split() if status == "OK" and messages[0] else []
+        
+        # If no direct match, try broader smart money query
         if not msg_ids:
-            msg = f"No emails found with subject '{subject_query}'."
+            status, messages = mail.search(None, '(SUBJECT "smart money")')
+            msg_ids = messages[0].split() if status == "OK" and messages[0] else []
+            
+        if not msg_ids:
+            # Fallback to search recent messages
+            status, messages = mail.search(None, "ALL")
+            msg_ids = messages[0].split() if status == "OK" and messages[0] else []
+            msg_ids = msg_ids[-50:]  # Inspect up to 50 latest emails
+            
+        if not msg_ids:
+            msg = f"No emails found matching subject '{subject_query}'."
             log_event("INFO", msg)
             mail.close()
             mail.logout()
@@ -251,19 +275,17 @@ def fetch_and_parse_gmail_report() -> Tuple[bool, str, List[Dict[str, Any]]]:
         latest_items = []
         found_target = False
         
-        for msg_id in reversed(msg_ids[-10:]):  # check up to 10 latest
+        for msg_id in reversed(msg_ids):
             res, data = mail.fetch(msg_id, "(RFC822)")
             if res != "OK":
                 continue
             raw_email = data[0][1]
             msg = email.message_from_bytes(raw_email)
             
-            # Decode subject
-            subject, encoding = decode_header(msg.get("Subject", ""))[0]
-            if isinstance(subject, bytes):
-                subject = subject.decode(encoding if encoding else "utf-8", errors="ignore")
+            # Decode subject cleanly across all MIME chunks
+            subject = decode_mime_words(msg.get("Subject", ""))
                 
-            if subject_query.lower() in subject.lower():
+            if "smart money" in subject.lower() or subject_query.lower() in subject.lower():
                 found_target = True
                 html_body = ""
                 text_body = ""

@@ -5,6 +5,8 @@
   "stop_loss_pct": 2.0,
   "target_pct": 5.0,
   "trigger_buffer_pct": 1.0,
+  "min_stock_price": 20.0,
+  "min_1m_avg_volume": 10000,
   "gmail_user": "your_email@gmail.com",
   "gmail_app_password": "your_16_char_app_password",
   "gmail_imap_server": "imap.gmail.com",
@@ -12,6 +14,8 @@
   "gmail_smtp_port": 587,
   "email_report_subject": "Daily smart money finder report",
   "notification_recipient": "",
+  "telegram_bot_token": "",
+  "telegram_chat_id": "",
   "market_check_interval_seconds": 120,
   "simulate_market_hours": false,
   "server_port": 8000

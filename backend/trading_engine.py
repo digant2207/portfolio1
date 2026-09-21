@@ -14,14 +14,16 @@ from .database import (
     get_portfolio_summary, update_watchlist_price
 )
 from .market_data import is_market_open, fetch_current_prices, fetch_monthly_average_volume
+from .notifier import notify_trade_buy, notify_trade_sell
 
 def run_trading_cycle(force_market_open: bool = False) -> Dict[str, Any]:
     """
     Executes one trading evaluation cycle:
     1. Checks if market is open (or overridden for testing).
     2. Fetches live CMP for watchlist items and open positions.
-    3. Evaluates 200 DMA + 1% buy triggers.
+    3. Evaluates 200 DMA + 1% buy triggers for mail watchlist items (both above and below 200 DMA sections).
     4. Evaluates SL (2%) and Target (5%) exits for open positions.
+    5. Sends instant Telegram alerts whenever any trade occurs.
     """
     cfg = load_config()
     market_open = force_market_open or is_market_open()
@@ -97,6 +99,16 @@ def run_trading_cycle(force_market_open: bool = False) -> Dict[str, Any]:
                 
                 msg = f"🛑 STOP-LOSS HIT: Sold {qty} {sym} @ ₹{cmp} (Buy: ₹{buy_price}, P&L: ₹{realized_pnl})"
                 log_event("TRADE", msg, conn=conn)
+                
+                # Instant Telegram Notification
+                try:
+                    notify_trade_sell({
+                        "symbol": sym, "stock_name": pos["stock_name"], "exit_reason": "STOP_LOSS_HIT",
+                        "price": cmp, "buy_price": buy_price, "quantity": qty, "pnl": realized_pnl, "proceeds": proceeds
+                    })
+                except Exception as tg_err:
+                    log_event("WARNING", f"Telegram alert error on SL exit: {tg_err}")
+                    
                 cycle_summary["stop_losses_hit"].append({
                     "symbol": sym, "price": cmp, "buy_price": buy_price, "pnl": realized_pnl
                 })
@@ -130,6 +142,16 @@ def run_trading_cycle(force_market_open: bool = False) -> Dict[str, Any]:
                 
                 msg = f"🎯 TARGET HIT: Sold {qty} {sym} @ ₹{cmp} (Buy: ₹{buy_price}, P&L: +₹{realized_pnl})"
                 log_event("TRADE", msg, conn=conn)
+                
+                # Instant Telegram Notification
+                try:
+                    notify_trade_sell({
+                        "symbol": sym, "stock_name": pos["stock_name"], "exit_reason": "TARGET_HIT",
+                        "price": cmp, "buy_price": buy_price, "quantity": qty, "pnl": realized_pnl, "proceeds": proceeds
+                    })
+                except Exception as tg_err:
+                    log_event("WARNING", f"Telegram alert error on Target exit: {tg_err}")
+                    
                 cycle_summary["targets_hit"].append({
                     "symbol": sym, "price": cmp, "buy_price": buy_price, "pnl": realized_pnl
                 })
@@ -165,9 +187,10 @@ def run_trading_cycle(force_market_open: bool = False) -> Dict[str, Any]:
                 continue
                 
             cursor.execute("UPDATE watchlist SET current_price = ?, last_checked = CURRENT_TIMESTAMP WHERE id = ?", (cmp, item["id"]))
+            
             trigger_price = item["trigger_price"]
             
-            # Condition 1: CMP >= 200 DMA + 1%
+            # Condition 1: CMP >= 200 DMA + 1% Breakout Trigger
             if cmp >= trigger_price:
                 # Condition 2: Filter out penny stocks / stocks with CMP <= min_stock_price (e.g. <= 20)
                 if cmp <= min_stock_price:
@@ -235,6 +258,17 @@ def run_trading_cycle(force_market_open: bool = False) -> Dict[str, Any]:
                 
                 msg = f"🚀 BUY TRIGGERED: Bought {qty} shares of {sym} @ ₹{cmp} (Inv: ₹{invested}, SL: ₹{sl_price} [-2%], Tgt: ₹{target_price} [+5%])"
                 log_event("TRADE", msg, conn=conn)
+                
+                # Instant Telegram Notification
+                try:
+                    notify_trade_buy({
+                        "symbol": sym, "stock_name": item["stock_name"], "section": item.get("section", "above_200_dma"),
+                        "price": cmp, "quantity": qty, "invested_amount": invested,
+                        "stop_loss": sl_price, "target_price": target_price
+                    })
+                except Exception as tg_err:
+                    log_event("WARNING", f"Telegram alert error on Buy trigger: {tg_err}")
+                    
                 cycle_summary["buys_triggered"].append({
                     "symbol": sym, "stock_name": item["stock_name"], "price": cmp, "quantity": qty, "invested": invested
                 })
@@ -283,4 +317,15 @@ def manual_close_position(position_id: int) -> bool:
         
         conn.commit()
         log_event("TRADE", f"✋ MANUAL EXIT: Closed {sym} @ ₹{cmp} (P&L: ₹{realized_pnl})")
+        
+        # Instant Telegram Notification
+        try:
+            notify_trade_sell({
+                "symbol": sym, "stock_name": pos["stock_name"], "exit_reason": "MANUAL",
+                "price": cmp, "buy_price": buy_price, "quantity": qty,
+                "pnl": realized_pnl, "proceeds": proceeds
+            })
+        except Exception as tg_err:
+            log_event("WARNING", f"Telegram alert error on manual close: {tg_err}")
+            
         return True

@@ -507,6 +507,8 @@ function initModals() {
             document.getElementById("input-gmail-pwd").value = cfg.gmail_app_password || "";
             document.getElementById("input-mail-subject").value = cfg.email_report_subject || "Daily smart money finder report";
             document.getElementById("input-notify-recipient").value = cfg.notification_recipient || "";
+            document.getElementById("input-telegram-token").value = cfg.telegram_bot_token || "";
+            document.getElementById("input-telegram-chat-id").value = cfg.telegram_chat_id || "";
             document.getElementById("input-total-capital").value = cfg.total_capital || 100000;
             document.getElementById("input-trade-alloc").value = cfg.trade_allocation || 10000;
             document.getElementById("input-trigger-buf").value = cfg.trigger_buffer_pct || 1.0;
@@ -525,6 +527,40 @@ function initModals() {
     document.getElementById("btn-close-settings").addEventListener("click", () => el.modalSettings.classList.remove("active"));
     document.getElementById("btn-cancel-settings").addEventListener("click", () => el.modalSettings.classList.remove("active"));
 
+    // Test Telegram Button
+    const btnTestTg = document.getElementById("btn-test-telegram");
+    if (btnTestTg) {
+        btnTestTg.addEventListener("click", async () => {
+            // First save any newly typed token/chat-id if present
+            const tokenInput = document.getElementById("input-telegram-token").value.trim();
+            const chatIdInput = document.getElementById("input-telegram-chat-id").value.trim();
+            if (tokenInput && chatIdInput) {
+                await fetch(`${API_BASE}/api/settings`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ telegram_bot_token: tokenInput, telegram_chat_id: chatIdInput })
+                });
+            }
+
+            try {
+                btnTestTg.disabled = true;
+                btnTestTg.innerText = "⏳ Sending...";
+                const res = await fetch(`${API_BASE}/api/actions/test-telegram`, { method: "POST" });
+                const data = await res.json();
+                if (data.success) {
+                    showToast("Telegram test message sent! Check your Telegram chat.", "success");
+                } else {
+                    showToast(`Telegram test failed: ${data.message}`, "error");
+                }
+            } catch (err) {
+                showToast(`Telegram error: ${err.message}`, "error");
+            } finally {
+                btnTestTg.disabled = false;
+                btnTestTg.innerText = "💬 Test Telegram";
+            }
+        });
+    }
+
     // Save Settings
     document.getElementById("settings-form").addEventListener("submit", async (e) => {
         e.preventDefault();
@@ -533,6 +569,8 @@ function initModals() {
             gmail_app_password: document.getElementById("input-gmail-pwd").value.trim(),
             email_report_subject: document.getElementById("input-mail-subject").value.trim(),
             notification_recipient: document.getElementById("input-notify-recipient").value.trim(),
+            telegram_bot_token: document.getElementById("input-telegram-token").value.trim(),
+            telegram_chat_id: document.getElementById("input-telegram-chat-id").value.trim(),
             total_capital: parseFloat(document.getElementById("input-total-capital").value),
             trade_allocation: parseFloat(document.getElementById("input-trade-alloc").value),
             trigger_buffer_pct: parseFloat(document.getElementById("input-trigger-buf").value),

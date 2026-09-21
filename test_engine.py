@@ -11,7 +11,17 @@ if sys.platform.startswith("win"):
     sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 
 # Add project root to sys.path
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+BASE_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(BASE_DIR))
+
+# CRITICAL: Isolate test database so test runs never overwrite data/portfolio.db
+TEST_DB_PATH = BASE_DIR / "data" / "test_portfolio.db"
+if TEST_DB_PATH.exists():
+    try:
+        TEST_DB_PATH.unlink()
+    except Exception:
+        pass
+os.environ["PORTFOLIO_DB_PATH"] = str(TEST_DB_PATH)
 
 from backend.database import init_db, reset_portfolio, get_portfolio_summary, get_open_positions, get_trades, get_all_watchlist
 from backend.mail_reader import parse_email_html_or_text, add_watchlist_items
@@ -20,7 +30,7 @@ from backend.market_data import simulate_price_update, simulate_volume_update
 from backend.notifier import generate_daily_report_html
 
 def test_full_pipeline():
-    print("--- 1. Initializing DB & Resetting Portfolio ---")
+    print("--- 1. Initializing DB & Resetting Portfolio (Isolated Test DB) ---")
     init_db()
     reset_portfolio()
     p0 = get_portfolio_summary()
@@ -38,6 +48,7 @@ def test_full_pipeline():
             <tr><th>Stock Name</th><th>CMP</th><th>200 DMA</th></tr>
             <tr><td>TATAMOTORS</td><td>970.00</td><td>960.00</td></tr>
             <tr><td>RELIANCE</td><td>2950.00</td><td>2900.00</td></tr>
+            <tr><td>INFOSYS</td><td>1850.00</td><td>1800.00</td></tr>
             <tr><td>PENNYCORP</td><td>15.00</td><td>14.00</td></tr>
             <tr><td>LOWVOLCORP</td><td>150.00</td><td>140.00</td></tr>
         </table>
@@ -55,12 +66,12 @@ def test_full_pipeline():
     for it in items:
         print(f"  * {it['symbol']} | Section: {it['section']} | CMP: Rs. {it['cmp_report']} | 200 DMA: Rs. {it['dma_200']} | Buy Trigger: Rs. {it['trigger_price']}")
     
-    assert len(items) == 5, f"Expected 5 parsed items, got {len(items)}"
+    assert len(items) == 6, f"Expected 6 parsed items, got {len(items)}"
     tatamotors = next(i for i in items if "TATAMOTORS" in i["symbol"])
     assert tatamotors["trigger_price"] == 969.60, f"Expected 969.60, got {tatamotors['trigger_price']}"
     
     added = add_watchlist_items(items)
-    assert added == 5, f"Expected 5 added to DB, got {added}"
+    assert added == 6, f"Expected 6 added to DB, got {added}"
     print(f"[OK] Watchlist successfully populated with {added} stocks.")
 
     print("\n--- 3. Testing CMP > 20 and Volume > 10,000 Filter Execution ---")
@@ -109,28 +120,45 @@ def test_full_pipeline():
     assert p2["realized_pnl"] > 0, f"Expected positive realized P&L, got {p2['realized_pnl']}"
     print(f"[OK] Target Hit! Realized Profit: Rs. {p2['realized_pnl']:,.2f} | Total Capital: Rs. {p2['total_portfolio_value']:,.2f}")
 
-    print("\n--- 5. Testing Stop Loss Exit (-2%) ---")
-    # Trigger buy for HDFCBANK: trigger is 1650 * 1.01 = 1666.50 -> set price to Rs. 1670.00
+    print("\n--- 5. Testing Selection from 'Best for Sell' List with Trigger Criteria ---")
+    # HDFCBANK is from below_200_dma list in email (200 DMA 1650 -> trigger 1666.50)
+    # When CMP reaches 1670 (> 1666.50), CMP > 20, volume >= 10000 -> Should BUY
     simulate_price_update("HDFCBANK.NS", 1670.00)
+    simulate_volume_update("HDFCBANK.NS", 80000)
     cycle3 = run_trading_cycle(force_market_open=True)
-    assert len(cycle3["buys_triggered"]) == 1
+    assert len(cycle3["buys_triggered"]) == 1, f"Expected 1 buy for HDFCBANK from sell list, got {len(cycle3['buys_triggered'])}"
+    assert cycle3["buys_triggered"][0]["symbol"] == "HDFCBANK.NS"
     
     pos_hdb = get_open_positions()[0]
-    print(f"  * Bought {pos_hdb['symbol']} @ Rs. {pos_hdb['buy_price']}, SL is Rs. {pos_hdb['stop_loss']}")
+    print(f"  * Bought {pos_hdb['symbol']} (from Sell section) @ Rs. {pos_hdb['buy_price']}, SL is Rs. {pos_hdb['stop_loss']}")
+    assert pos_hdb["section"] == "below_200_dma"
     
     # Simulate drop below Stop Loss (1670 * 0.98 = 1636.60) -> drop to Rs. 1630.00
     simulate_price_update("HDFCBANK.NS", 1630.00)
     cycle4 = run_trading_cycle(force_market_open=True)
     assert len(cycle4["stop_losses_hit"]) == 1, "Expected stop loss exit"
-    print(f"[OK] Stop Loss Hit properly handled! Exit details: {cycle4['stop_losses_hit'][0]}")
+    print(f"[OK] Sell list item properly triggered and Stop Loss Exit properly handled! Details: {cycle4['stop_losses_hit'][0]}")
 
-    print("\n--- 6. Testing Daily Summary Email Generation ---")
+    print("\n--- 6. Testing Telegram Alert Formatter ---")
+    from backend.notifier import send_telegram_message
+    # Test telegram message formatting (returns False gracefully if credentials not configured, no crash)
+    ok, msg = send_telegram_message("🤖 Test message from automated test suite")
+    print(f"[OK] Telegram notifier executed safely (Status: {ok}, Message: '{msg}')")
+
+    print("\n--- 7. Testing Daily Summary Email Generation ---")
     subject, html_report, summ = generate_daily_report_html()
     assert "Smart Money Paper Trading Report" in html_report
     assert "Active Open Holdings" in html_report
     assert "Today's Executed Trades" in html_report
     print(f"[OK] Generated Email Subject: '{subject}'")
     print(f"[OK] Email HTML Body generated ({len(html_report)} bytes)")
+
+    # Clean up test DB
+    if TEST_DB_PATH.exists():
+        try:
+            TEST_DB_PATH.unlink()
+        except Exception:
+            pass
 
     print("\n=== ALL TESTS PASSED SUCCESSFULLY! ===")
 

@@ -256,3 +256,111 @@ def send_daily_email_report() -> Tuple[bool, str]:
         err = f"Failed to send daily summary email via SMTP: {str(e)}"
         log_event("ERROR", err)
         return False, err
+
+def send_telegram_message(text: str, parse_mode: str = "HTML") -> Tuple[bool, str]:
+    """
+    Sends an instant message notification via Telegram Bot API.
+    Requires 'telegram_bot_token' and 'telegram_chat_id' in settings.
+    """
+    import urllib.request
+    import urllib.parse
+    import json
+    
+    cfg = load_config()
+    token = cfg.get("telegram_bot_token", "").strip()
+    chat_id = cfg.get("telegram_chat_id", "").strip()
+    
+    if not token or not chat_id:
+        return False, "Telegram token or chat_id not configured."
+        
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    payload = {
+        "chat_id": chat_id,
+        "text": text,
+        "parse_mode": parse_mode
+    }
+    
+    try:
+        data = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(
+            url,
+            data=data,
+            headers={"Content-Type": "application/json", "User-Agent": "PaperTradingBot/1.0"}
+        )
+        with urllib.request.urlopen(req, timeout=10) as response:
+            res_body = response.read().decode("utf-8")
+            res_json = json.loads(res_body)
+            if res_json.get("ok"):
+                return True, "Telegram message sent successfully."
+            else:
+                desc = res_json.get("description", "Unknown error")
+                log_event("WARNING", f"Telegram API error: {desc}")
+                return False, desc
+    except Exception as e:
+        err = f"Telegram send error: {str(e)}"
+        log_event("WARNING", err)
+        return False, err
+
+def notify_trade_buy(trade: Dict[str, Any]):
+    """Dispatches a Telegram alert for a newly executed BUY order."""
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    sym = trade.get("symbol", "")
+    name = trade.get("stock_name", sym)
+    section = trade.get("section", "above_200_dma")
+    section_label = "Above 200 DMA" if section == "above_200_dma" else "Below 200 DMA"
+    price = trade.get("price", 0.0)
+    qty = trade.get("quantity", 0)
+    invested = trade.get("invested_amount", price * qty)
+    sl = trade.get("stop_loss", price * 0.98)
+    target = trade.get("target_price", price * 1.05)
+    
+    msg = (
+        f"🚀 <b>BUY ORDER EXECUTED</b>\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"📈 <b>Stock:</b> <code>{sym}</code> ({name})\n"
+        f"📑 <b>Section:</b> {section_label}\n"
+        f"💵 <b>Buy Price:</b> ₹{price:,.2f}\n"
+        f"🔢 <b>Quantity:</b> {qty}\n"
+        f"💰 <b>Invested:</b> ₹{invested:,.2f}\n"
+        f"🛑 <b>Stop-Loss (-2%):</b> ₹{sl:,.2f}\n"
+        f"🎯 <b>Target (+5%):</b> ₹{target:,.2f}\n"
+        f"⏰ <b>Time:</b> {now_str}\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"<i>Strategy: 200 DMA + 1% Breakout</i>"
+    )
+    send_telegram_message(msg)
+
+def notify_trade_sell(trade: Dict[str, Any]):
+    """Dispatches a Telegram alert for an exit (Target Hit, Stop Loss Hit, or Manual)."""
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    sym = trade.get("symbol", "")
+    name = trade.get("stock_name", sym)
+    reason = trade.get("exit_reason", "SELL")
+    sell_price = trade.get("price", 0.0)
+    buy_price = trade.get("buy_price", 0.0)
+    qty = trade.get("quantity", 0)
+    pnl = trade.get("pnl", 0.0)
+    proceeds = trade.get("proceeds", round(sell_price * qty, 2))
+    pnl_pct = round(((sell_price - buy_price) / buy_price * 100), 2) if buy_price > 0 else 0.0
+    sign = "+" if pnl >= 0 else ""
+    
+    if reason == "TARGET_HIT":
+        header = "🎯 <b>TARGET REACHED (+5% EXIT)</b>"
+    elif reason == "STOP_LOSS_HIT":
+        header = "🛑 <b>STOP-LOSS TRIGGERED (-2% EXIT)</b>"
+    else:
+        header = f"✋ <b>POSITION CLOSED ({reason})</b>"
+        
+    msg = (
+        f"{header}\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"📉 <b>Stock:</b> <code>{sym}</code> ({name})\n"
+        f"💵 <b>Exit Price:</b> ₹{sell_price:,.2f}\n"
+        f"🛒 <b>Buy Price:</b> ₹{buy_price:,.2f}\n"
+        f"🔢 <b>Quantity:</b> {qty}\n"
+        f"💰 <b>Total Value:</b> ₹{proceeds:,.2f}\n"
+        f"📊 <b>Realized P&L:</b> {sign}₹{pnl:,.2f} ({sign}{pnl_pct}%)\n"
+        f"⏰ <b>Time:</b> {now_str}\n"
+        f"━━━━━━━━━━━━━━━━━━"
+    )
+    send_telegram_message(msg)

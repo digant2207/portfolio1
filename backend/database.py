@@ -6,10 +6,10 @@ import sqlite3
 import json
 from datetime import datetime, date
 from typing import List, Dict, Any, Optional
-from .config import DB_PATH, load_config
+from .config import get_db_path, load_config
 
 def get_db():
-    conn = sqlite3.connect(DB_PATH, timeout=30.0)
+    conn = sqlite3.connect(get_db_path(), timeout=30.0)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA busy_timeout=15000")
     conn.row_factory = sqlite3.Row
