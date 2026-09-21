@@ -30,6 +30,17 @@ def scheduled_daily_report():
     success, msg = send_daily_email_report()
     log_event("INFO" if success else "WARNING", f"Daily report result: {msg}")
 
+def scheduled_evening_watchlist():
+    log_event("INFO", "Scheduled task (18:30 IST): Sending Tomorrow's Candidate List (Top 10)...")
+    from .notifier import send_evening_watchlist_email, notify_evening_watchlist_telegram
+    from .database import get_pending_watchlist
+    items = get_pending_watchlist()
+    if items:
+        send_evening_watchlist_email(items)
+        notify_evening_watchlist_telegram(items)
+    else:
+        log_event("INFO", "18:30 IST watchlist check: No pending candidate items in database yet.")
+
 def start_scheduler():
     if not scheduler.running:
         # 1. Evening Gmail Window: Poll every 15 minutes between 17:30 and 20:45 IST
@@ -54,6 +65,14 @@ def start_scheduler():
             scheduled_daily_report,
             CronTrigger(day_of_week="mon-fri", hour=15, minute=45, timezone=IST),
             id="daily_report_job",
+            replace_existing=True
+        )
+
+        # 4. 18:30 IST daily: Dispatch Tomorrow's Candidate List (Top 10)
+        scheduler.add_job(
+            scheduled_evening_watchlist,
+            CronTrigger(hour=18, minute=30, timezone=IST),
+            id="evening_watchlist_job",
             replace_existing=True
         )
         

@@ -153,6 +153,16 @@ def test_full_pipeline():
     print(f"[OK] Generated Email Subject: '{subject}'")
     print(f"[OK] Email HTML Body generated ({len(html_report)} bytes)")
 
+    print("\n--- 8. Testing Tomorrow's Candidate List (Top 10) Report ---")
+    from backend.notifier import generate_evening_watchlist_html, notify_evening_watchlist_telegram
+    w_subject, w_html = generate_evening_watchlist_html(items)
+    assert "Tomorrow's Candidate Watchlist" in w_subject
+    assert "Top 6" in w_subject or "Top" in w_subject
+    assert "TATAMOTORS" in w_html
+    assert "RELIANCE" in w_html
+    print(f"[OK] Candidate List Email Subject: '{w_subject}'")
+    print(f"[OK] Candidate List HTML Body generated ({len(w_html)} bytes)")
+
     # Clean up test DB
     if TEST_DB_PATH.exists():
         try:

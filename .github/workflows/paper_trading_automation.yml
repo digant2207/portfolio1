@@ -23,6 +23,7 @@ on:
           - fetch-mail
           - trade-cycle
           - daily-report
+          - evening-watchlist
 
 permissions:
   contents: write
@@ -68,6 +69,8 @@ jobs:
             python scripts/cloud_runner.py --task trade-cycle
           elif [ "$MANUAL_INPUT" == "daily-report" ]; then
             python scripts/cloud_runner.py --task daily-report
+          elif [ "$MANUAL_INPUT" == "evening-watchlist" ]; then
+            python scripts/cloud_runner.py --task evening-watchlist
           else
             # Automated Schedule logic
             # Evening Window (17:30 to 20:30 IST) -> fetch mail

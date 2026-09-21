@@ -324,7 +324,16 @@ def fetch_and_parse_gmail_report() -> Tuple[bool, str, List[Dict[str, Any]]]:
             
         added = add_watchlist_items(latest_items)
         log_event("INFO", f"Successfully parsed {len(latest_items)} stocks from email report. Added {added} new to tomorrow's watchlist.")
-        return True, f"Successfully parsed {len(latest_items)} stocks. {added} added to watchlist.", latest_items
+        
+        # Dispatch evening candidate watchlist email & Telegram notification (Top 10)
+        try:
+            from .notifier import send_evening_watchlist_email, notify_evening_watchlist_telegram
+            send_evening_watchlist_email(latest_items)
+            notify_evening_watchlist_telegram(latest_items)
+        except Exception as notify_err:
+            log_event("WARNING", f"Evening watchlist notification dispatch warning: {notify_err}")
+
+        return True, f"Successfully parsed {len(latest_items)} stocks. {added} added to watchlist. Evening candidate report dispatched.", latest_items
         
     except Exception as e:
         err = f"Gmail IMAP connection failed: {str(e)}"

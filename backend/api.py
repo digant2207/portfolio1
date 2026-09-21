@@ -202,6 +202,24 @@ def api_send_daily_report():
     success, msg = send_daily_email_report()
     return {"success": success, "message": msg}
 
+@app.get("/api/actions/preview-watchlist-report", response_class=HTMLResponse)
+def api_preview_watchlist_report():
+    from .notifier import generate_evening_watchlist_html
+    from .database import get_pending_watchlist
+    items = get_pending_watchlist()
+    subject, html = generate_evening_watchlist_html(items)
+    return HTMLResponse(content=html)
+
+@app.post("/api/actions/send-watchlist-report")
+def api_send_watchlist_report():
+    from .notifier import send_evening_watchlist_email, notify_evening_watchlist_telegram
+    from .database import get_pending_watchlist
+    items = get_pending_watchlist()
+    success, msg = send_evening_watchlist_email(items)
+    if items:
+        notify_evening_watchlist_telegram(items)
+    return {"success": success, "message": msg}
+
 @app.post("/api/actions/reset-portfolio")
 def api_reset_portfolio():
     reset_portfolio()

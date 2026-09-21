@@ -23,7 +23,7 @@ from backend.notifier import send_daily_email_report
 
 def main():
     parser = argparse.ArgumentParser(description="Paper Trading Cloud Runner")
-    parser.add_argument("--task", choices=["fetch-mail", "trade-cycle", "daily-report"], required=True, help="Task to execute")
+    parser.add_argument("--task", choices=["fetch-mail", "trade-cycle", "daily-report", "evening-watchlist"], required=True, help="Task to execute")
     args = parser.parse_args()
 
     init_db()
@@ -33,7 +33,7 @@ def main():
         success, msg, items = fetch_and_parse_gmail_report()
         print(f"Result: {msg}")
         if items:
-            print(f"[+] Loaded {len(items)} stocks into watchlist.")
+            print(f"[+] Loaded {len(items)} stocks into watchlist and dispatched evening candidate alerts.")
         if not success:
             sys.exit(1)
 
@@ -48,6 +48,20 @@ def main():
         print(f"Result: {msg}")
         if not success:
             sys.exit(1)
+
+    elif args.task == "evening-watchlist":
+        print("[*] Executing Cloud Task: evening-watchlist")
+        from backend.notifier import send_evening_watchlist_email, notify_evening_watchlist_telegram
+        from backend.database import get_pending_watchlist
+        items = get_pending_watchlist()
+        if items:
+            success, msg = send_evening_watchlist_email(items)
+            notify_evening_watchlist_telegram(items)
+            print(f"Result: {msg}")
+            if not success:
+                sys.exit(1)
+        else:
+            print("[i] No pending candidate items found in watchlist.")
 
 if __name__ == "__main__":
     main()

@@ -364,3 +364,180 @@ def notify_trade_sell(trade: Dict[str, Any]):
         f"━━━━━━━━━━━━━━━━━━"
     )
     send_telegram_message(msg)
+
+def generate_evening_watchlist_html(items: List[Dict[str, Any]]) -> Tuple[str, str]:
+    """
+    Generates subject and HTML email content for tomorrow's candidate watchlist (Top 10).
+    """
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    top_candidates = items[:10]
+    
+    subject = f"🎯 Tomorrow's Candidate Watchlist [Top {len(top_candidates)}] - Smart Money 200 DMA ({today_str})"
+    
+    rows_html = ""
+    for idx, item in enumerate(top_candidates, 1):
+        sec = item.get("section", "above_200_dma")
+        sec_badge = '<span style="background: rgba(16, 185, 129, 0.15); color: #10b981; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;">Above 200 DMA</span>' if sec == "above_200_dma" else '<span style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;">Below 200 DMA</span>'
+        
+        rows_html += f"""
+        <tr style="border-bottom: 1px solid #1e293b;">
+            <td style="padding: 12px 14px; font-weight: 700; color: #f8fafc; font-size: 14px;">
+                <span style="color: #64748b; font-size: 12px; margin-right: 6px;">#{idx}</span>
+                {item['symbol']}
+            </td>
+            <td style="padding: 12px 14px; color: #cbd5e1;">{item.get('stock_name', item['symbol'])}</td>
+            <td style="padding: 12px 14px;">{sec_badge}</td>
+            <td style="padding: 12px 14px; color: #94a3b8;">₹{item['cmp_report']:,.2f}</td>
+            <td style="padding: 12px 14px; color: #cbd5e1;">₹{item['dma_200']:,.2f}</td>
+            <td style="padding: 12px 14px; color: #38bdf8; font-weight: 700; font-size: 14px;">₹{item['trigger_price']:,.2f}</td>
+        </tr>
+        """
+        
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <style>
+            body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0b0f19; color: #e2e8f0; margin: 0; padding: 20px; }}
+            .container {{ max-width: 800px; margin: 0 auto; background: #131b2e; border: 1px solid #202b42; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }}
+            .header {{ background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); padding: 24px; border-bottom: 1px solid #243049; }}
+            .badge-hdr {{ display: inline-block; background: #0284c7; color: #ffffff; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; margin-bottom: 8px; }}
+            .section {{ padding: 20px; }}
+            table {{ width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }}
+            th {{ background: #0d1322; color: #64748b; font-weight: 600; text-align: left; padding: 10px 14px; border-bottom: 1px solid #232936; }}
+            .rules-box {{ background: #0d1322; border: 1px solid #1e293b; border-radius: 8px; padding: 16px; margin: 20px; }}
+            .footer {{ padding: 16px 20px; background: #0d1322; color: #64748b; font-size: 11px; text-align: center; border-top: 1px solid #1e293b; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <span class="badge-hdr">Evening 6:30 PM Report</span>
+                <h1 style="margin: 0 0 6px 0; font-size: 22px; color: #f8fafc;">Tomorrow's Candidate Watchlist</h1>
+                <p style="margin: 0; color: #94a3b8; font-size: 13px;">Extracted from Smart Money Finder Report | Date: {today_str}</p>
+            </div>
+
+            <div class="section">
+                <h3 style="font-size: 15px; font-weight: 600; color: #38bdf8; margin: 0 0 12px 0; text-transform: uppercase; letter-spacing: 0.5px;">
+                    Top {len(top_candidates)} Breakout Candidates For Next Trading Session
+                </h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Symbol</th>
+                            <th>Company</th>
+                            <th>Category</th>
+                            <th>Report CMP</th>
+                            <th>200 DMA</th>
+                            <th>Buy Trigger (+1%)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {rows_html}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="rules-box">
+                <h4 style="margin: 0 0 8px 0; color: #38bdf8; font-size: 13px;">⚙️ Execution & Risk Management Rules:</h4>
+                <ul style="margin: 0; padding-left: 20px; color: #94a3b8; font-size: 12px; line-height: 1.6;">
+                    <li><strong>Trigger Entry:</strong> Buy is automatically evaluated when live CMP crosses 200 DMA + 1%.</li>
+                    <li><strong>Allocation:</strong> ₹10,000 per trade (Max 10 active positions from ₹1,00,000 capital).</li>
+                    <li><strong>Safety Filters:</strong> Stocks with CMP &le; ₹20 or 1-Month Avg Volume &lt; 10,000 shares are automatically ignored.</li>
+                    <li><strong>Target:</strong> Minimum +5% gain exit.</li>
+                    <li><strong>Stop-Loss:</strong> Strict -2% loss exit.</li>
+                </ul>
+            </div>
+
+            <div class="footer">
+                Automated notification from your Paper Trading Terminal. Instant Telegram alerts enabled for live trades.
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    return subject, html
+
+def send_evening_watchlist_email(items: Any = None) -> Tuple[bool, str]:
+    """
+    Dispatches tomorrow's candidate watchlist email (Top 10) to the user's inbox at 6:30 PM.
+    """
+    cfg = load_config()
+    user = cfg.get("gmail_user", "").strip()
+    pwd = cfg.get("gmail_app_password", "").strip()
+    recipient = cfg.get("notification_recipient", "").strip() or user
+    smtp_server = cfg.get("gmail_smtp_server", "smtp.gmail.com")
+    smtp_port = cfg.get("gmail_smtp_port", 587)
+    
+    if not user or not pwd:
+        msg = "Cannot send email: Gmail credentials not configured in settings."
+        log_event("WARNING", msg)
+        return False, msg
+
+    if not items:
+        items = get_pending_watchlist()
+
+    if not items:
+        msg = "No watchlist candidate items available to send."
+        log_event("INFO", msg)
+        return False, msg
+
+    subject, html_body = generate_evening_watchlist_html(items)
+    
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"] = f"Paper Trading Bot <{user}>"
+        msg["To"] = recipient
+        
+        part = MIMEText(html_body, "html")
+        msg.attach(part)
+        
+        with smtplib.SMTP(smtp_server, smtp_port) as server:
+            server.starttls()
+            server.login(user, pwd)
+            server.sendmail(user, recipient, msg.as_string())
+            
+        success_msg = f"Tomorrow's Candidate Watchlist email successfully sent to {recipient} ({len(items[:10])} stocks)."
+        log_event("INFO", success_msg)
+        return True, success_msg
+    except Exception as e:
+        err = f"Failed to send evening watchlist email via SMTP: {str(e)}"
+        log_event("ERROR", err)
+        return False, err
+
+def notify_evening_watchlist_telegram(items: List[Dict[str, Any]]):
+    """
+    Sends tomorrow's candidate list (Top 10) via Telegram.
+    """
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    top_candidates = items[:10]
+    if not top_candidates:
+        return
+        
+    lines = [
+        "🎯 <b>TOMORROW'S CANDIDATE WATCHLIST (TOP 10)</b>",
+        "━━━━━━━━━━━━━━━━━━",
+        f"📅 <b>Report Date:</b> {today_str}",
+        f"📊 <b>Strategy:</b> 200 DMA + 1% Breakout\n"
+    ]
+    
+    for idx, it in enumerate(top_candidates, 1):
+        sym = it.get("symbol", "")
+        sec = "Above 200 DMA" if it.get("section") == "above_200_dma" else "Below 200 DMA"
+        cmp_val = it.get("cmp_report", 0.0)
+        dma_val = it.get("dma_200", 0.0)
+        trig = it.get("trigger_price", 0.0)
+        
+        lines.append(
+            f"<b>{idx}. <code>{sym}</code></b> (<i>{sec}</i>)\n"
+            f"   💵 CMP: ₹{cmp_val:,.2f} | 200 DMA: ₹{dma_val:,.2f}\n"
+            f"   🎯 <b>Trigger Buy:</b> ₹{trig:,.2f}\n"
+        )
+        
+    lines.append("━━━━━━━━━━━━━━━━━━")
+    lines.append("<i>Criteria: CMP > ₹20 | Vol > 10,000 | ₹10k Alloc | SL: 2% | Tgt: 5%</i>")
+    
+    full_msg = "\n".join(lines)
+    send_telegram_message(full_msg)
