@@ -100,6 +100,8 @@ def parse_smart_money_sheet(csv_text: str) -> List[Dict[str, Any]]:
     """
     cfg = load_config()
     buffer_pct = cfg.get("trigger_buffer_pct", 1.0)
+    min_price = cfg.get("min_stock_price", 20.0)
+    min_volume = cfg.get("min_1m_avg_volume", 10000.0)
     today_str = datetime.now().strftime("%Y-%m-%d")
     results = []
     
@@ -137,6 +139,14 @@ def parse_smart_money_sheet(csv_text: str) -> List[Dict[str, Any]]:
             change_pct = parse_number(change_pct_raw) if change_pct_raw else 0.0
             
             if cmp_val <= 0 or dma_200 <= 0:
+                continue
+
+            # Strict Filter 1: Ignore penny stocks (CMP <= 20)
+            if cmp_val <= min_price:
+                continue
+
+            # Strict Filter 2: Ignore illiquid stocks (1-Month Avg Daily Volume < 10,000)
+            if avg_vol_1m > 0 and avg_vol_1m < min_volume:
                 continue
             
             trigger_price = round(dma_200 * (1 + (buffer_pct / 100.0)), 2)

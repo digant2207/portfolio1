@@ -221,12 +221,29 @@ def add_watchlist_items(items: List[Dict[str, Any]]) -> int:
     with get_db() as conn:
         cursor = conn.cursor()
         for item in items:
-            # Avoid duplicate on same report date for same symbol
+            avg_vol = float(item.get("avg_volume_1m") or 0.0)
+
+            # Update existing or insert new
             cursor.execute("""
                 SELECT id FROM watchlist 
                 WHERE report_date = ? AND symbol = ?
             """, (item["report_date"], item["symbol"]))
-            if cursor.fetchone():
+            row = cursor.fetchone()
+            if row:
+                cursor.execute("""
+                    UPDATE watchlist SET
+                        avg_volume_1m = CASE WHEN ? > 0 THEN ? ELSE avg_volume_1m END,
+                        golden_cross = CASE WHEN ? = 1 THEN 1 ELSE golden_cross END,
+                        cmp_report = ?,
+                        dma_200 = ?,
+                        trigger_price = ?
+                    WHERE id = ?
+                """, (
+                    avg_vol, avg_vol,
+                    1 if item.get("golden_cross") else 0,
+                    item["cmp_report"], item["dma_200"], item["trigger_price"],
+                    row["id"]
+                ))
                 continue
                 
             cursor.execute("""
@@ -240,22 +257,38 @@ def add_watchlist_items(items: List[Dict[str, Any]]) -> int:
                 item["section"], item["cmp_report"], item["dma_200"],
                 item["trigger_price"],
                 1 if item.get("golden_cross") else 0,
-                item.get("avg_volume_1m", 0)
+                avg_vol
             ))
             added += 1
         conn.commit()
     return added
 
 def get_pending_watchlist() -> List[Dict[str, Any]]:
+    cfg = load_config()
+    min_price = cfg.get("min_stock_price", 20.0)
+    min_volume = cfg.get("min_1m_avg_volume", 10000.0)
     with get_db() as conn:
-        rows = conn.execute("SELECT * FROM watchlist WHERE status = 'PENDING' ORDER BY id ASC").fetchall()
+        # Exclude confirmed low-volume stocks and penny stocks
+        rows = conn.execute("""
+            SELECT * FROM watchlist 
+            WHERE status = 'PENDING' 
+              AND cmp_report > ?
+              AND (avg_volume_1m >= ? OR avg_volume_1m = 0)
+            ORDER BY id ASC
+        """, (min_price, min_volume)).fetchall()
         return [dict(r) for r in rows]
 
-def get_nearest_breakout_candidates(limit: int = 10, min_price: float = 20.0) -> List[Dict[str, Any]]:
+def get_nearest_breakout_candidates(limit: int = 10, min_price: float = None, min_volume: float = None) -> List[Dict[str, Any]]:
     """
     Returns candidate stocks sorted by proximity to their 200 DMA + 1% breakout trigger.
-    Filters out penny stocks (CMP <= min_price).
+    Strictly filters out penny stocks (CMP <= min_price) and illiquid stocks (1-month avg volume < min_volume).
     """
+    cfg = load_config()
+    if min_price is None:
+        min_price = cfg.get("min_stock_price", 20.0)
+    if min_volume is None:
+        min_volume = cfg.get("min_1m_avg_volume", 10000.0)
+
     with get_db() as conn:
         rows = conn.execute("SELECT * FROM watchlist WHERE status = 'PENDING'").fetchall()
         candidates = []
@@ -263,9 +296,33 @@ def get_nearest_breakout_candidates(limit: int = 10, min_price: float = 20.0) ->
             item = dict(r)
             cmp = item.get("current_price") or item.get("cmp_report", 0.0)
             trig = item.get("trigger_price", 0.0)
+            avg_vol = float(item.get("avg_volume_1m") or 0.0)
             
+            # 1. Filter penny stocks & invalid trigger prices
             if cmp <= min_price or trig <= 0:
                 continue
+                
+            # 2. Filter low volume stocks (< 10,000 shares 1-month avg volume)
+            if avg_vol > 0 and avg_vol < min_volume:
+                continue
+            elif avg_vol <= 0:
+                # Check simulated/cached market_data table
+                sim_vol = None
+                try:
+                    md_row = conn.execute("SELECT volume FROM market_data WHERE symbol = ?", (item["symbol"],)).fetchone()
+                    if md_row and md_row["volume"]:
+                        sim_vol = float(md_row["volume"])
+                except Exception:
+                    pass
+                    
+                if sim_vol is not None:
+                    if sim_vol < min_volume:
+                        continue
+                    avg_vol = sim_vol
+                    item["avg_volume_1m"] = avg_vol
+                else:
+                    # In live mode without volume data, skip unverified stock
+                    continue
                 
             diff_pct = round(((trig - cmp) / trig) * 100, 2)
             abs_dist = round(abs(trig - cmp) / trig * 100, 2)

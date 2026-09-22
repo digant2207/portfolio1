@@ -236,7 +236,7 @@ def generate_daily_report_html() -> Tuple[str, str, Dict[str, Any]]:
             <div class="section">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                     <h3 class="section-title" style="margin: 0; color: #38bdf8;">🎯 Tomorrow's Top 10 Most Near Breakout Candidates</h3>
-                    <span style="font-size: 11px; background: rgba(56, 189, 248, 0.15); color: #38bdf8; padding: 3px 8px; border-radius: 4px; font-weight: 600;">Ranked by Proximity to 200 DMA Trigger</span>
+                    <span style="font-size: 11px; background: rgba(56, 189, 248, 0.15); color: #38bdf8; padding: 3px 8px; border-radius: 4px; font-weight: 600;">Ranked by Proximity (Min Vol: 10,000+ | CMP &gt; ₹20)</span>
                 </div>
                 <table>
                     <thead>
