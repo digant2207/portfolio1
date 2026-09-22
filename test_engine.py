@@ -22,6 +22,8 @@ if TEST_DB_PATH.exists():
     except Exception:
         pass
 os.environ["PORTFOLIO_DB_PATH"] = str(TEST_DB_PATH)
+# CRITICAL: Disable live external notifications so test trades (TATAMOTORS, HDFCBANK) never spam user's Telegram/Email
+os.environ["MOCK_NOTIFICATIONS"] = "1"
 
 from backend.database import init_db, reset_portfolio, get_portfolio_summary, get_open_positions, get_trades, get_all_watchlist
 from backend.mail_reader import parse_email_html_or_text, add_watchlist_items

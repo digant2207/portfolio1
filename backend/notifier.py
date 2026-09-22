@@ -221,6 +221,10 @@ def send_daily_email_report() -> Tuple[bool, str]:
     """
     Sends the generated daily report email via Gmail SMTP.
     """
+    import os
+    if os.environ.get("MOCK_NOTIFICATIONS") == "1":
+        return True, "Mock daily summary email delivered (test mode active)."
+
     cfg = load_config()
     user = cfg.get("gmail_user", "").strip()
     pwd = cfg.get("gmail_app_password", "").strip()
@@ -266,6 +270,10 @@ def send_telegram_message(text: str, parse_mode: str = "HTML") -> Tuple[bool, st
     import urllib.parse
     import json
     
+    import os
+    if os.environ.get("MOCK_NOTIFICATIONS") == "1":
+        return True, "Mock Telegram notification delivered (test mode active)."
+        
     cfg = load_config()
     token = cfg.get("telegram_bot_token", "").strip()
     chat_id = cfg.get("telegram_chat_id", "").strip()
@@ -463,6 +471,10 @@ def send_evening_watchlist_email(items: Any = None) -> Tuple[bool, str]:
     """
     Dispatches tomorrow's candidate watchlist email (Top 10) to the user's inbox at 6:30 PM.
     """
+    import os
+    if os.environ.get("MOCK_NOTIFICATIONS") == "1":
+        return True, "Mock evening watchlist email delivered (test mode active)."
+
     cfg = load_config()
     user = cfg.get("gmail_user", "").strip()
     pwd = cfg.get("gmail_app_password", "").strip()
