@@ -10,12 +10,16 @@ from typing import List, Dict, Any, Tuple, Optional
 from .config import load_config
 from .database import (
     get_portfolio_summary, get_open_positions, get_trades,
-    get_pending_watchlist, log_event, get_db
+    get_pending_watchlist, get_nearest_breakout_candidates, log_event, get_db
 )
 
 def generate_daily_report_html() -> Tuple[str, str, Dict[str, Any]]:
     """
-    Generates subject and HTML content for the daily summary email.
+    Generates subject and HTML content for the comprehensive daily 6:30 PM email report
+    covering:
+    1. Portfolio Financial Status & Open Positions
+    2. Today's Executed Trades
+    3. Tomorrow's Top 10 Most Near Breakout Candidates (Ranked by 200 DMA + 1% proximity)
     """
     summary = get_portfolio_summary()
     open_positions = get_open_positions()
@@ -30,7 +34,9 @@ def generate_daily_report_html() -> Tuple[str, str, Dict[str, Any]]:
         """).fetchall()
         todays_trades = [dict(r) for r in trades_rows]
         
-    watchlist_items = get_pending_watchlist()
+    breakout_candidates = get_nearest_breakout_candidates(limit=10)
+    summary["breakout_candidates"] = breakout_candidates
+    summary["todays_trades"] = todays_trades
     
     total_val = summary.get("total_portfolio_value", 100000.0)
     cash = summary.get("cash_balance", 100000.0)
@@ -40,10 +46,12 @@ def generate_daily_report_html() -> Tuple[str, str, Dict[str, Any]]:
     
     color_ret = "#10b981" if ret_pct >= 0 else "#ef4444"
     sign_ret = "+" if ret_pct >= 0 else ""
+    sign_pnl_today = "+" if pnl_today >= 0 else ""
+    color_pnl_today = "#10b981" if pnl_today >= 0 else "#ef4444"
     
-    subject = f"📊 Paper Trading Daily Report [{today_str}] - Value: ₹{total_val:,.2f} ({sign_ret}{ret_pct}%)"
+    subject = f"📊 Smart Money Daily Report [6:30 PM | {today_str}] - Value: ₹{total_val:,.2f} ({sign_ret}{ret_pct}%) | Top Breakouts"
     
-    # Render Open Positions rows
+    # 1. Render Open Positions rows
     positions_html = ""
     if open_positions:
         for p in open_positions:
@@ -52,8 +60,11 @@ def generate_daily_report_html() -> Tuple[str, str, Dict[str, Any]]:
             pnl_color = "#10b981" if pnl >= 0 else "#ef4444"
             pnl_sign = "+" if pnl >= 0 else ""
             positions_html += f"""
-            <tr style="border-bottom: 1px solid #232936;">
-                <td style="padding: 10px 12px; font-weight: 600; color: #f8fafc;">{p['symbol']}</td>
+            <tr style="border-bottom: 1px solid #1e293b;">
+                <td style="padding: 10px 12px; font-weight: 700; color: #f8fafc;">
+                    {p['symbol']}
+                    <div style="font-size: 11px; color: #94a3b8; font-weight: 400;">{p.get('stock_name', '')}</div>
+                </td>
                 <td style="padding: 10px 12px; color: #94a3b8;">{p['quantity']}</td>
                 <td style="padding: 10px 12px; color: #cbd5e1;">₹{p['buy_price']:,.2f}</td>
                 <td style="padding: 10px 12px; color: #f8fafc; font-weight: 600;">₹{p.get('current_price', p['buy_price']):,.2f}</td>
@@ -63,45 +74,70 @@ def generate_daily_report_html() -> Tuple[str, str, Dict[str, Any]]:
             </tr>
             """
     else:
-        positions_html = '<tr><td colspan="7" style="padding: 15px; text-align: center; color: #64748b;">No active open positions currently.</td></tr>'
+        positions_html = '<tr><td colspan="7" style="padding: 16px; text-align: center; color: #64748b;">No active open positions currently held.</td></tr>'
 
-    # Render Today's Trades rows
+    # 2. Render Today's Trades rows
     trades_html = ""
     if todays_trades:
         for t in todays_trades:
             is_buy = t['trade_type'] == 'BUY'
             type_color = "#3b82f6" if is_buy else "#f59e0b"
             trade_pnl_str = f"₹{t.get('pnl', 0.0):,.2f}" if not is_buy else "-"
+            trade_pnl_color = "#10b981" if t.get('pnl', 0) >= 0 else "#ef4444"
             trades_html += f"""
-            <tr style="border-bottom: 1px solid #232936;">
+            <tr style="border-bottom: 1px solid #1e293b;">
                 <td style="padding: 8px 12px; color: #94a3b8; font-size: 12px;">{t['timestamp'].split()[1] if ' ' in t['timestamp'] else t['timestamp']}</td>
                 <td style="padding: 8px 12px; font-weight: 600; color: #f8fafc;">{t['symbol']}</td>
                 <td style="padding: 8px 12px;"><span style="background: {type_color}22; color: {type_color}; padding: 3px 8px; border-radius: 4px; font-weight: 600; font-size: 11px;">{t['trade_type']}</span></td>
                 <td style="padding: 8px 12px; color: #cbd5e1;">₹{t['price']:,.2f}</td>
                 <td style="padding: 8px 12px; color: #cbd5e1;">{t['quantity']}</td>
                 <td style="padding: 8px 12px; color: #f8fafc;">₹{t['total_value']:,.2f}</td>
-                <td style="padding: 8px 12px; color: #10b981 if t.get('pnl',0) >= 0 else #ef4444;">{trade_pnl_str}</td>
+                <td style="padding: 8px 12px; color: {trade_pnl_color}; font-weight: 600;">{trade_pnl_str}</td>
                 <td style="padding: 8px 12px; color: #94a3b8; font-size: 12px;">{t.get('exit_reason') or 'ENTRY'}</td>
             </tr>
             """
     else:
-        trades_html = '<tr><td colspan="8" style="padding: 15px; text-align: center; color: #64748b;">No trades executed today.</td></tr>'
+        trades_html = '<tr><td colspan="8" style="padding: 16px; text-align: center; color: #64748b;">No trades executed during today\'s market session.</td></tr>'
 
-    # Render Watchlist preview
-    watchlist_html = ""
-    if watchlist_items:
-        for w in watchlist_items[:10]:
-            sec_badge = "Above 200 DMA" if w["section"] == "above_200_dma" else "Below 200 DMA"
-            watchlist_html += f"""
-            <tr style="border-bottom: 1px solid #232936;">
-                <td style="padding: 8px 12px; font-weight: 600; color: #f8fafc;">{w['symbol']}</td>
-                <td style="padding: 8px 12px; color: #94a3b8;">{sec_badge}</td>
-                <td style="padding: 8px 12px; color: #cbd5e1;">₹{w['dma_200']:,.2f}</td>
-                <td style="padding: 8px 12px; color: #38bdf8; font-weight: 600;">₹{w['trigger_price']:,.2f}</td>
+    # 3. Render Tomorrow's Top 10 Breakout Candidates
+    candidates_html = ""
+    if breakout_candidates:
+        for idx, c in enumerate(breakout_candidates, 1):
+            is_above = c.get("section") == "above_200_dma"
+            sec_badge = '<span style="background: rgba(16, 185, 129, 0.15); color: #10b981; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;">Above 200 DMA</span>' if is_above else '<span style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;">Below 200 DMA</span>'
+            gc_badge = '<br><span style="display: inline-block; margin-top: 4px; background: rgba(234, 179, 8, 0.2); color: #eab308; padding: 1px 6px; border-radius: 3px; font-size: 10px; font-weight: 700;">🌟 GOLDEN CROSS</span>' if c.get("golden_cross") else ""
+            
+            cmp_val = c.get("current_price") or c.get("cmp_report", 0.0)
+            trig_val = c.get("trigger_price", 0.0)
+            dma_val = c.get("dma_200", 0.0)
+            prox_pct = c.get("proximity_pct", 0.0)
+            is_crossed = c.get("is_crossed", False)
+            bar_color = "#10b981" if is_crossed else "#38bdf8"
+            status_color = "#10b981" if is_crossed else "#38bdf8"
+            vol_str = f"{int(c.get('avg_volume_1m', 0)):,}" if c.get("avg_volume_1m") else "-"
+            
+            candidates_html += f"""
+            <tr style="border-bottom: 1px solid #1e293b;">
+                <td style="padding: 10px 12px; font-weight: 700; color: #f8fafc;">
+                    <span style="color: #64748b; font-size: 11px; margin-right: 4px;">#{idx}</span>
+                    {c['symbol']}
+                    <div style="font-size: 11px; color: #94a3b8; font-weight: 400; margin-top: 2px;">{c.get('stock_name', '')}</div>
+                </td>
+                <td style="padding: 10px 12px;">{sec_badge}{gc_badge}</td>
+                <td style="padding: 10px 12px; color: #cbd5e1; font-weight: 600;">₹{cmp_val:,.2f}</td>
+                <td style="padding: 10px 12px; color: #94a3b8;">₹{dma_val:,.2f}</td>
+                <td style="padding: 10px 12px; color: #38bdf8; font-weight: 700;">₹{trig_val:,.2f}</td>
+                <td style="padding: 10px 12px;">
+                    <div style="background: #1e293b; border-radius: 4px; height: 6px; overflow: hidden; margin-bottom: 4px; width: 110px;">
+                        <div style="background: {bar_color}; width: {min(100, prox_pct)}%; height: 100%;"></div>
+                    </div>
+                    <span style="color: {status_color}; font-weight: 600; font-size: 11px;">{c.get('proximity_status')}</span>
+                </td>
+                <td style="padding: 10px 12px; color: #94a3b8; font-size: 12px;">{vol_str}</td>
             </tr>
             """
     else:
-        watchlist_html = '<tr><td colspan="4" style="padding: 15px; text-align: center; color: #64748b;">No pending triggers in watchlist.</td></tr>'
+        candidates_html = '<tr><td colspan="7" style="padding: 16px; text-align: center; color: #64748b;">No candidate breakout stocks found in watchlist.</td></tr>'
 
     html_body = f"""
     <!DOCTYPE html>
@@ -110,9 +146,10 @@ def generate_daily_report_html() -> Tuple[str, str, Dict[str, Any]]:
         <meta charset="utf-8">
         <style>
             body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0b0f19; color: #e2e8f0; margin: 0; padding: 20px; }}
-            .container {{ max-width: 800px; margin: 0 auto; background: #131b2e; border: 1px solid #202b42; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }}
+            .container {{ max-width: 820px; margin: 0 auto; background: #131b2e; border: 1px solid #202b42; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }}
             .header {{ background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); padding: 24px; border-bottom: 1px solid #243049; }}
-            .metric-grid {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; padding: 20px; background: #0d1322; }}
+            .badge-hdr {{ display: inline-block; background: #0284c7; color: #ffffff; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; margin-bottom: 8px; }}
+            .metric-grid {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; padding: 20px; background: #0d1322; border-bottom: 1px solid #1c263c; }}
             .card {{ background: #162035; border: 1px solid #23304b; border-radius: 8px; padding: 14px; text-align: center; }}
             .card-label {{ font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }}
             .card-val {{ font-size: 18px; font-weight: 700; color: #f8fafc; }}
@@ -120,16 +157,19 @@ def generate_daily_report_html() -> Tuple[str, str, Dict[str, Any]]:
             .section-title {{ font-size: 15px; font-weight: 600; color: #38bdf8; margin: 0 0 12px 0; text-transform: uppercase; letter-spacing: 0.5px; }}
             table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
             th {{ background: #0d1322; color: #64748b; font-weight: 600; text-align: left; padding: 10px 12px; border-bottom: 1px solid #232936; }}
+            .rules-box {{ background: #0d1322; border: 1px solid #1e293b; border-radius: 8px; padding: 16px; margin: 20px; }}
             .footer {{ padding: 16px 20px; background: #0d1322; color: #64748b; font-size: 11px; text-align: center; }}
         </style>
     </head>
     <body>
         <div class="container">
             <div class="header">
+                <span class="badge-hdr">Daily 6:30 PM IST Summary</span>
                 <h1 style="margin: 0 0 6px 0; font-size: 22px; color: #f8fafc;">Smart Money Paper Trading Report</h1>
-                <p style="margin: 0; color: #94a3b8; font-size: 13px;">Date: {today_str} | Strategy: 200 DMA + 1% Breakout</p>
+                <p style="margin: 0; color: #94a3b8; font-size: 13px;">Date: {today_str} | Generated at: 18:30 IST | Strategy: 200 DMA + 1% Breakout</p>
             </div>
             
+            <!-- Section 1: Portfolio Financial Metrics -->
             <div class="metric-grid">
                 <div class="card">
                     <div class="card-label">Total Portfolio</div>
@@ -140,7 +180,7 @@ def generate_daily_report_html() -> Tuple[str, str, Dict[str, Any]]:
                     <div class="card-val">₹{cash:,.2f}</div>
                 </div>
                 <div class="card">
-                    <div class="card-label">Invested Amount</div>
+                    <div class="card-label">Invested Capital</div>
                     <div class="card-val">₹{invested:,.2f}</div>
                 </div>
                 <div class="card">
@@ -149,8 +189,9 @@ def generate_daily_report_html() -> Tuple[str, str, Dict[str, Any]]:
                 </div>
             </div>
 
+            <!-- Section 2: Active Open Positions -->
             <div class="section">
-                <h3 class="section-title">Active Open Holdings ({len(open_positions)})</h3>
+                <h3 class="section-title">💼 Active Open Holdings ({len(open_positions)})</h3>
                 <table>
                     <thead>
                         <tr>
@@ -169,12 +210,13 @@ def generate_daily_report_html() -> Tuple[str, str, Dict[str, Any]]:
                 </table>
             </div>
 
+            <!-- Section 3: Today's Executed Trades -->
             <div class="section">
-                <h3 class="section-title">Today's Executed Trades ({len(todays_trades)})</h3>
+                <h3 class="section-title">⚡ Today's Executed Trades ({len(todays_trades)})</h3>
                 <table>
                     <thead>
                         <tr>
-                            <th>Time</th>
+                            <th>Time (IST)</th>
                             <th>Stock</th>
                             <th>Action</th>
                             <th>Price</th>
@@ -190,25 +232,43 @@ def generate_daily_report_html() -> Tuple[str, str, Dict[str, Any]]:
                 </table>
             </div>
 
+            <!-- Section 4: Tomorrow's Top 10 Most Near Breakout Candidates -->
             <div class="section">
-                <h3 class="section-title">Tomorrow's Trigger Watchlist ({len(watchlist_items)})</h3>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <h3 class="section-title" style="margin: 0; color: #38bdf8;">🎯 Tomorrow's Top 10 Most Near Breakout Candidates</h3>
+                    <span style="font-size: 11px; background: rgba(56, 189, 248, 0.15); color: #38bdf8; padding: 3px 8px; border-radius: 4px; font-weight: 600;">Ranked by Proximity to 200 DMA Trigger</span>
+                </div>
                 <table>
                     <thead>
                         <tr>
-                            <th>Symbol</th>
-                            <th>List Type</th>
+                            <th>Rank & Stock</th>
+                            <th>Category</th>
+                            <th>Report CMP</th>
                             <th>200 DMA</th>
-                            <th>Trigger Buy (+1%)</th>
+                            <th>Buy Trigger (+1%)</th>
+                            <th>Breakout Proximity</th>
+                            <th>1-Mo Avg Vol</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {watchlist_html}
+                        {candidates_html}
                     </tbody>
                 </table>
             </div>
 
+            <div class="rules-box">
+                <h4 style="margin: 0 0 8px 0; color: #38bdf8; font-size: 13px;">⚙️ Execution & Risk Management Rules:</h4>
+                <ul style="margin: 0; padding-left: 20px; color: #94a3b8; font-size: 12px; line-height: 1.6;">
+                    <li><strong>Trigger Entry:</strong> Buy is automatically evaluated when live CMP crosses 200 DMA + 1% during market hours (09:15 - 15:30 IST).</li>
+                    <li><strong>Allocation:</strong> ₹10,000 per trade (Max 10 active positions from ₹1,00,000 capital).</li>
+                    <li><strong>Safety Filters:</strong> Stocks with CMP &le; ₹20 or 1-Month Avg Volume &lt; 10,000 shares are automatically ignored.</li>
+                    <li><strong>Target Exit:</strong> +5% profit target exit.</li>
+                    <li><strong>Stop-Loss Exit:</strong> Strict -2% capital protection stop-loss.</li>
+                </ul>
+            </div>
+
             <div class="footer">
-                Automated notification from your Paper Trading Terminal. Allocation: ₹10,000 / trade (Max 10). SL: 2% | Target: 5%.
+                Automated notification from your Paper Trading Terminal. Instant Telegram alerts enabled for all live trade triggers.
             </div>
         </div>
     </body>
@@ -217,9 +277,47 @@ def generate_daily_report_html() -> Tuple[str, str, Dict[str, Any]]:
     
     return subject, html_body, summary
 
+def notify_daily_summary_telegram(summary: Dict[str, Any], todays_trades: List[Dict[str, Any]], candidates: List[Dict[str, Any]]):
+    """
+    Dispatches a compact evening daily summary alert via Telegram at 6:30 PM IST.
+    """
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    total_val = summary.get("total_portfolio_value", 100000.0)
+    cash = summary.get("cash_balance", 100000.0)
+    invested = summary.get("invested_capital", 0.0)
+    ret_pct = summary.get("total_return_pct", 0.0)
+    sign_ret = "+" if ret_pct >= 0 else ""
+    open_count = summary.get("open_positions_count", 0)
+    trades_count = len(todays_trades)
+
+    lines = [
+        "📊 <b>PAPER TRADING DAILY SUMMARY (6:30 PM IST)</b>",
+        "━━━━━━━━━━━━━━━━━━",
+        f"📅 <b>Date:</b> {today_str}",
+        f"💰 <b>Total Portfolio:</b> ₹{total_val:,.2f} ({sign_ret}{ret_pct}%)",
+        f"💵 <b>Cash:</b> ₹{cash:,.2f} | <b>Invested:</b> ₹{invested:,.2f}",
+        f"💼 <b>Open Positions:</b> {open_count} | <b>Trades Today:</b> {trades_count}\n",
+        "🎯 <b>TOMORROW'S MOST NEAR BREAKOUTS (TOP 5)</b>",
+        "━━━━━━━━━━━━━━━━━━"
+    ]
+
+    for idx, c in enumerate(candidates[:5], 1):
+        sym = c.get("symbol", "")
+        cmp_val = c.get("current_price") or c.get("cmp_report", 0.0)
+        trig = c.get("trigger_price", 0.0)
+        prox_status = c.get("proximity_status", "")
+        gc = " 🌟" if c.get("golden_cross") else ""
+        lines.append(f"<b>{idx}. <code>{sym}</code></b>{gc} | CMP: ₹{cmp_val:,.2f} | Trig: ₹{trig:,.2f}\n   <i>{prox_status}</i>")
+
+    lines.append("━━━━━━━━━━━━━━━━━━")
+    lines.append("📧 <i>Comprehensive report sent to your email inbox!</i>")
+    
+    msg = "\n".join(lines)
+    send_telegram_message(msg)
+
 def send_daily_email_report() -> Tuple[bool, str]:
     """
-    Sends the generated daily report email via Gmail SMTP.
+    Sends the generated comprehensive daily report email via Gmail SMTP and dispatches Telegram summary.
     """
     import os
     if os.environ.get("MOCK_NOTIFICATIONS") == "1":
@@ -238,6 +336,8 @@ def send_daily_email_report() -> Tuple[bool, str]:
         return False, msg
         
     subject, html_body, summary = generate_daily_report_html()
+    todays_trades = summary.get("todays_trades", [])
+    breakout_candidates = summary.get("breakout_candidates", [])
     
     try:
         msg = MIMEMultipart("alternative")
@@ -255,6 +355,13 @@ def send_daily_email_report() -> Tuple[bool, str]:
             
         success_msg = f"Daily summary email successfully sent to {recipient}."
         log_event("INFO", success_msg)
+        
+        # Dispatch compact Telegram summary alongside email
+        try:
+            notify_daily_summary_telegram(summary, todays_trades, breakout_candidates)
+        except Exception as tg_e:
+            log_event("WARNING", f"Telegram daily summary alert error: {tg_e}")
+            
         return True, success_msg
     except Exception as e:
         err = f"Failed to send daily summary email via SMTP: {str(e)}"

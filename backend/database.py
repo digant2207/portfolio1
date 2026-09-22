@@ -251,6 +251,38 @@ def get_pending_watchlist() -> List[Dict[str, Any]]:
         rows = conn.execute("SELECT * FROM watchlist WHERE status = 'PENDING' ORDER BY id ASC").fetchall()
         return [dict(r) for r in rows]
 
+def get_nearest_breakout_candidates(limit: int = 10, min_price: float = 20.0) -> List[Dict[str, Any]]:
+    """
+    Returns candidate stocks sorted by proximity to their 200 DMA + 1% breakout trigger.
+    Filters out penny stocks (CMP <= min_price).
+    """
+    with get_db() as conn:
+        rows = conn.execute("SELECT * FROM watchlist WHERE status = 'PENDING'").fetchall()
+        candidates = []
+        for r in rows:
+            item = dict(r)
+            cmp = item.get("current_price") or item.get("cmp_report", 0.0)
+            trig = item.get("trigger_price", 0.0)
+            
+            if cmp <= min_price or trig <= 0:
+                continue
+                
+            diff_pct = round(((trig - cmp) / trig) * 100, 2)
+            abs_dist = round(abs(trig - cmp) / trig * 100, 2)
+            prox_pct = round((cmp / trig) * 100, 1)
+            is_crossed = cmp >= trig
+            
+            item["distance_pct"] = diff_pct
+            item["abs_distance_pct"] = abs_dist
+            item["proximity_pct"] = prox_pct
+            item["is_crossed"] = is_crossed
+            item["proximity_status"] = f"CROSSING (+{abs(diff_pct):.2f}% Above Trigger)" if is_crossed else f"APPROACHING ({diff_pct:.2f}% to Trigger)"
+            candidates.append(item)
+            
+        # Sort by nearest to breakout trigger (smallest absolute distance)
+        candidates.sort(key=lambda x: x["abs_distance_pct"])
+        return candidates[:limit]
+
 def get_all_watchlist(limit: int = 50) -> List[Dict[str, Any]]:
     with get_db() as conn:
         rows = conn.execute("SELECT * FROM watchlist ORDER BY id DESC LIMIT ?", (limit,)).fetchall()

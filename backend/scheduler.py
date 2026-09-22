@@ -26,44 +26,33 @@ def scheduled_market_check():
     # Only runs during market hours or if forced
     run_trading_cycle(force_market_open=False)
 
-def scheduled_daily_report():
+def scheduled_daily_630_report():
     from datetime import datetime
     from .database import is_notification_sent, record_notification_sent
     today_str = datetime.now().strftime("%Y-%m-%d")
-    if is_notification_sent(today_str, "DAILY_SUMMARY"):
-        log_event("INFO", f"Daily report for {today_str} already sent earlier today. Skipping duplicate.")
-        return
-    log_event("INFO", "Scheduled task: Generating and dispatching daily portfolio report...")
-    success, msg = send_daily_email_report()
-    if success:
-        record_notification_sent(today_str, "DAILY_SUMMARY", msg)
-    log_event("INFO" if success else "WARNING", f"Daily report result: {msg}")
-
-def scheduled_evening_watchlist():
-    from datetime import datetime
-    from .database import is_notification_sent, record_notification_sent, get_pending_watchlist
-    today_str = datetime.now().strftime("%Y-%m-%d")
-    if is_notification_sent(today_str, "EVENING_WATCHLIST"):
-        log_event("INFO", f"18:30 IST watchlist check: Evening watchlist for {today_str} already sent earlier today. Skipping duplicate.")
+    if is_notification_sent(today_str, "DAILY_REPORT_630"):
+        log_event("INFO", f"Daily 6:30 PM report for {today_str} already sent earlier today. Skipping duplicate.")
         return
         
-    log_event("INFO", "Scheduled task (18:30 IST): Sending Tomorrow's Candidate List (Top 10)...")
-    from .notifier import send_evening_watchlist_email, notify_evening_watchlist_telegram
-    items = get_pending_watchlist()
-    if items:
-        send_evening_watchlist_email(items)
-        notify_evening_watchlist_telegram(items)
-        record_notification_sent(today_str, "EVENING_WATCHLIST", f"Scheduled 18:30 dispatch ({len(items)} stocks)")
-    else:
-        log_event("INFO", "18:30 IST watchlist check: No pending candidate items in database yet.")
+    # Ensure latest Google Sheet data is fetched before generating report
+    try:
+        fetch_and_process_sheets()
+    except Exception as e:
+        log_event("WARNING", f"Pre-report sheet fetch notice: {e}")
+        
+    log_event("INFO", "Scheduled task (18:30 IST): Generating and sending comprehensive daily report & nearest breakouts...")
+    success, msg = send_daily_email_report()
+    if success:
+        record_notification_sent(today_str, "DAILY_REPORT_630", msg)
+    log_event("INFO" if success else "WARNING", f"Daily 6:30 PM report result: {msg}")
 
 def start_scheduler():
     if not scheduler.running:
-        # 1. Evening Google Sheets Window: Poll every 15 minutes between 17:00 and 20:45 IST
-        # Deduplication ensures notifications are sent only once per day.
+        # 1. Evening Google Sheets Window: Poll every 15 minutes between 17:00 and 18:15 IST
+        # Ensures fresh candidate data is ready before 18:30 report
         scheduler.add_job(
             scheduled_sheet_fetch,
-            CronTrigger(hour="17-20", minute="*/15", timezone=IST),
+            CronTrigger(hour="17", minute="*/15", timezone=IST),
             id="sheet_fetch_job",
             replace_existing=True
         )
@@ -76,19 +65,11 @@ def start_scheduler():
             replace_existing=True
         )
         
-        # 3. 15:45 IST (Mon-Fri): Send EOD report
+        # 3. 18:30 IST Daily: Comprehensive Daily Report (Portfolio status, today's trades, top breakouts)
         scheduler.add_job(
-            scheduled_daily_report,
-            CronTrigger(day_of_week="mon-fri", hour=15, minute=45, timezone=IST),
-            id="daily_report_job",
-            replace_existing=True
-        )
-
-        # 4. 18:30 IST daily: Dispatch Tomorrow's Candidate List (Top 10)
-        scheduler.add_job(
-            scheduled_evening_watchlist,
+            scheduled_daily_630_report,
             CronTrigger(hour=18, minute=30, timezone=IST),
-            id="evening_watchlist_job",
+            id="daily_630_report_job",
             replace_existing=True
         )
         
