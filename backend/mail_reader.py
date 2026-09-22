@@ -325,15 +325,23 @@ def fetch_and_parse_gmail_report() -> Tuple[bool, str, List[Dict[str, Any]]]:
         added = add_watchlist_items(latest_items)
         log_event("INFO", f"Successfully parsed {len(latest_items)} stocks from email report. Added {added} new to tomorrow's watchlist.")
         
-        # Dispatch evening candidate watchlist email & Telegram notification (Top 10)
-        try:
-            from .notifier import send_evening_watchlist_email, notify_evening_watchlist_telegram
-            send_evening_watchlist_email(latest_items)
-            notify_evening_watchlist_telegram(latest_items)
-        except Exception as notify_err:
-            log_event("WARNING", f"Evening watchlist notification dispatch warning: {notify_err}")
+        # Dispatch evening candidate watchlist email & Telegram notification (Top 10) - ONLY ONCE PER DAY
+        from .database import is_notification_sent, record_notification_sent
+        already_sent = is_notification_sent(today_str, "EVENING_WATCHLIST")
+        
+        if not already_sent:
+            try:
+                from .notifier import send_evening_watchlist_email, notify_evening_watchlist_telegram
+                email_ok, email_msg = send_evening_watchlist_email(latest_items)
+                notify_evening_watchlist_telegram(latest_items)
+                record_notification_sent(today_str, "EVENING_WATCHLIST", f"Sent for {len(latest_items)} candidate stocks")
+                log_event("INFO", f"Evening candidate watchlist notification dispatched for {today_str}.")
+            except Exception as notify_err:
+                log_event("WARNING", f"Evening watchlist notification dispatch warning: {notify_err}")
+        else:
+            log_event("INFO", f"Evening candidate watchlist for {today_str} already dispatched today. Skipping duplicate notifications.")
 
-        return True, f"Successfully parsed {len(latest_items)} stocks. {added} added to watchlist. Evening candidate report dispatched.", latest_items
+        return True, f"Successfully parsed {len(latest_items)} stocks. {added} added to watchlist.", latest_items
         
     except Exception as e:
         err = f"Gmail IMAP connection failed: {str(e)}"

@@ -26,18 +26,33 @@ def scheduled_market_check():
     run_trading_cycle(force_market_open=False)
 
 def scheduled_daily_report():
+    from datetime import datetime
+    from .database import is_notification_sent, record_notification_sent
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    if is_notification_sent(today_str, "DAILY_SUMMARY"):
+        log_event("INFO", f"Daily report for {today_str} already sent earlier today. Skipping duplicate.")
+        return
     log_event("INFO", "Scheduled task: Generating and dispatching daily portfolio report...")
     success, msg = send_daily_email_report()
+    if success:
+        record_notification_sent(today_str, "DAILY_SUMMARY", msg)
     log_event("INFO" if success else "WARNING", f"Daily report result: {msg}")
 
 def scheduled_evening_watchlist():
+    from datetime import datetime
+    from .database import is_notification_sent, record_notification_sent, get_pending_watchlist
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    if is_notification_sent(today_str, "EVENING_WATCHLIST"):
+        log_event("INFO", f"18:30 IST watchlist check: Evening watchlist for {today_str} already sent earlier today. Skipping duplicate.")
+        return
+        
     log_event("INFO", "Scheduled task (18:30 IST): Sending Tomorrow's Candidate List (Top 10)...")
     from .notifier import send_evening_watchlist_email, notify_evening_watchlist_telegram
-    from .database import get_pending_watchlist
     items = get_pending_watchlist()
     if items:
         send_evening_watchlist_email(items)
         notify_evening_watchlist_telegram(items)
+        record_notification_sent(today_str, "EVENING_WATCHLIST", f"Scheduled 18:30 dispatch ({len(items)} stocks)")
     else:
         log_event("INFO", "18:30 IST watchlist check: No pending candidate items in database yet.")
 

@@ -110,6 +110,35 @@ def init_db():
             )
         """)
         
+        # Notification deduplication tracking table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS sent_notifications (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                report_date TEXT NOT NULL,
+                notification_type TEXT NOT NULL,  -- 'EVENING_WATCHLIST', 'DAILY_SUMMARY'
+                sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                details TEXT
+            )
+        """)
+        
+        conn.commit()
+
+def is_notification_sent(report_date: str, notification_type: str) -> bool:
+    """Checks if a specific notification has already been dispatched on the given date."""
+    with get_db() as conn:
+        row = conn.execute("""
+            SELECT id FROM sent_notifications 
+            WHERE report_date = ? AND notification_type = ?
+        """, (report_date, notification_type)).fetchone()
+        return row is not None
+
+def record_notification_sent(report_date: str, notification_type: str, details: str = ""):
+    """Records that a notification has been dispatched for the date to prevent duplicates."""
+    with get_db() as conn:
+        conn.execute("""
+            INSERT INTO sent_notifications (report_date, notification_type, details)
+            VALUES (?, ?, ?)
+        """, (report_date, notification_type, details))
         conn.commit()
 
 def log_event(level: str, message: str, details: Any = None, conn: Optional[sqlite3.Connection] = None):

@@ -44,24 +44,38 @@ def main():
 
     elif args.task == "daily-report":
         print("[*] Executing Cloud Task: daily-report")
-        success, msg = send_daily_email_report()
-        print(f"Result: {msg}")
-        if not success:
-            sys.exit(1)
+        from backend.database import is_notification_sent, record_notification_sent
+        from datetime import datetime
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        if is_notification_sent(today_str, "DAILY_SUMMARY"):
+            print(f"[i] Daily summary report for {today_str} already sent today. Skipping.")
+        else:
+            success, msg = send_daily_email_report()
+            print(f"Result: {msg}")
+            if success:
+                record_notification_sent(today_str, "DAILY_SUMMARY", msg)
+            if not success:
+                sys.exit(1)
 
     elif args.task == "evening-watchlist":
         print("[*] Executing Cloud Task: evening-watchlist")
         from backend.notifier import send_evening_watchlist_email, notify_evening_watchlist_telegram
-        from backend.database import get_pending_watchlist
-        items = get_pending_watchlist()
-        if items:
-            success, msg = send_evening_watchlist_email(items)
-            notify_evening_watchlist_telegram(items)
-            print(f"Result: {msg}")
-            if not success:
-                sys.exit(1)
+        from backend.database import get_pending_watchlist, is_notification_sent, record_notification_sent
+        from datetime import datetime
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        if is_notification_sent(today_str, "EVENING_WATCHLIST"):
+            print(f"[i] Evening candidate watchlist for {today_str} already sent today. Skipping.")
         else:
-            print("[i] No pending candidate items found in watchlist.")
+            items = get_pending_watchlist()
+            if items:
+                success, msg = send_evening_watchlist_email(items)
+                notify_evening_watchlist_telegram(items)
+                record_notification_sent(today_str, "EVENING_WATCHLIST", f"Cloud runner dispatch ({len(items)} stocks)")
+                print(f"Result: {msg}")
+                if not success:
+                    sys.exit(1)
+            else:
+                print("[i] No pending candidate items found in watchlist.")
 
 if __name__ == "__main__":
     main()
