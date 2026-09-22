@@ -20,6 +20,7 @@ on:
         type: choice
         options:
           - all
+          - fetch-sheets
           - fetch-mail
           - trade-cycle
           - daily-report
@@ -63,8 +64,8 @@ jobs:
           echo "Current IST Time: $(date)"
           echo "Manual Input: $MANUAL_INPUT"
 
-          if [ "$MANUAL_INPUT" == "fetch-mail" ]; then
-            python scripts/cloud_runner.py --task fetch-mail
+          if [ "$MANUAL_INPUT" == "fetch-sheets" ] || [ "$MANUAL_INPUT" == "fetch-mail" ]; then
+            python scripts/cloud_runner.py --task fetch-sheets
           elif [ "$MANUAL_INPUT" == "trade-cycle" ]; then
             python scripts/cloud_runner.py --task trade-cycle
           elif [ "$MANUAL_INPUT" == "daily-report" ]; then
@@ -73,10 +74,10 @@ jobs:
             python scripts/cloud_runner.py --task evening-watchlist
           else
             # Automated Schedule logic
-            # Evening Window (17:30 to 20:30 IST) -> fetch mail
+            # Evening Window (17:00 to 20:30 IST) -> fetch sheets
             if [ "$CURRENT_HOUR" -ge 17 ] && [ "$CURRENT_HOUR" -le 20 ]; then
-              echo "[+] Triggering Evening Gmail Report Fetch..."
-              python scripts/cloud_runner.py --task fetch-mail
+              echo "[+] Triggering Evening Google Sheets Watchlist Fetch..."
+              python scripts/cloud_runner.py --task fetch-sheets
             fi
 
             # Trading Hours Window (09:15 to 15:30 IST, Mon-Fri) -> trade cycle

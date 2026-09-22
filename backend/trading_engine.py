@@ -198,7 +198,10 @@ def run_trading_cycle(force_market_open: bool = False) -> Dict[str, Any]:
                     continue
                     
                 # Condition 3: Filter out illiquid stocks where 1-month avg daily volume < min_1m_avg_vol (e.g. < 10,000)
-                avg_vol = fetch_monthly_average_volume(sym)
+                # Use pre-stored volume from Google Sheet if available; fallback to Yahoo Finance API
+                avg_vol = item.get("avg_volume_1m", 0)
+                if avg_vol <= 0:
+                    avg_vol = fetch_monthly_average_volume(sym)
                 if avg_vol < min_1m_avg_vol:
                     log_event("WARNING", f"Trigger reached for {sym} @ ₹{cmp}, but ignored: 1-month avg volume ({int(avg_vol):,}) is below required minimum of {int(min_1m_avg_vol):,} shares.", conn=conn)
                     continue

@@ -39,8 +39,8 @@
                 <button class="btn btn-primary" id="btn-run-check" title="Run manual price and trigger check cycle">
                     <span class="btn-icon">⚡</span> Run Market Check
                 </button>
-                <button class="btn btn-secondary" id="btn-sync-email" title="Fetch latest 6 PM screening report from Gmail">
-                    <span class="btn-icon">📥</span> Sync Gmail
+                <button class="btn btn-secondary" id="btn-sync-email" title="Fetch latest watchlist from Google Sheets">
+                    <span class="btn-icon">📊</span> Sync Sheets
                 </button>
                 <button class="btn btn-secondary" id="btn-open-paste-modal" title="Paste raw email report to parse">
                     <span class="btn-icon">📝</span> Paste Report
@@ -292,25 +292,32 @@
     <div class="modal-overlay" id="modal-settings">
         <div class="modal-content modal-md">
             <div class="modal-header">
-                <h3>⚙️ Trading Terminal & Gmail Settings</h3>
+                <h3>⚙️ Trading Terminal Settings</h3>
                 <button class="modal-close" id="btn-close-settings">&times;</button>
             </div>
             <div class="modal-body">
                 <form id="settings-form">
-                    <div class="form-section-title">Gmail Integration</div>
+                    <div class="form-section-title">Google Sheets Data Source</div>
+                    <div class="form-group">
+                        <label for="input-sheet-id-1">Sheet 1: Smart Money 200 DMA Report (Spreadsheet ID)</label>
+                        <input type="text" id="input-sheet-id-1" placeholder="e.g. 1B__Wam6da-nD7ReSg2JlHwu5pH7xDHlkQkBjSzF9YdA">
+                        <small class="form-help">The Google Sheet with columns: Symbol, Name, CMP, 200 DMA, Output (Buy/Sell/Avoid), Volume.</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="input-sheet-id-2">Sheet 2: DMA Signal Tracker (Spreadsheet ID)</label>
+                        <input type="text" id="input-sheet-id-2" placeholder="e.g. 1_rWhyap8gO-u8ehP1vDCiad-RwnFjGBCn2R5qiis4_A">
+                        <small class="form-help">Optional. Golden Cross / Death Cross confirmation signals. Leave blank to skip.</small>
+                    </div>
+                    <div class="form-section-title">Gmail SMTP (for Sending Notifications)</div>
                     <div class="form-group">
                         <label for="input-gmail-user">Gmail Address</label>
-                        <input type="email" id="input-gmail-user" placeholder="yourname@gmail.com" required>
-                        <small class="form-help">The Gmail account receiving the daily 6 PM report and sending your daily summaries.</small>
+                        <input type="email" id="input-gmail-user" placeholder="yourname@gmail.com">
+                        <small class="form-help">Used to send daily summary emails and watchlist notification emails.</small>
                     </div>
                     <div class="form-group">
                         <label for="input-gmail-pwd">Google App Password (16 characters)</label>
                         <input type="password" id="input-gmail-pwd" placeholder="Enter 16-character App Password">
                         <small class="form-help">Generate in your Google Account: Security &gt; 2-Step Verification &gt; App Passwords.</small>
-                    </div>
-                    <div class="form-group">
-                        <label for="input-mail-subject">Email Subject Filter</label>
-                        <input type="text" id="input-mail-subject" value="Daily smart money finder report">
                     </div>
                     <div class="form-section-title">Telegram Instant Trade Alerts</div>
                     <div class="form-group">

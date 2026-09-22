@@ -1,25 +1,26 @@
 """
 Task scheduler for:
-1. 18:05 IST daily - Fetch and parse Gmail report
+1. 17:00-20:00 IST daily (every 15 min) - Fetch Google Sheets watchlist data
 2. 09:16 - 15:30 IST (Mon-Fri) every 2 mins - Run paper trading market cycle
 3. 15:45 IST (Mon-Fri) - Send daily email summary report
+4. 18:30 IST daily - Dispatch Tomorrow's Candidate List (Top 10)
 """
 import pytz
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from .database import log_event
-from .mail_reader import fetch_and_parse_gmail_report
+from .sheet_reader import fetch_and_process_sheets
 from .trading_engine import run_trading_cycle
 from .notifier import send_daily_email_report
 
 IST = pytz.timezone("Asia/Kolkata")
 scheduler = BackgroundScheduler(timezone=IST)
 
-def scheduled_mail_fetch():
-    log_event("INFO", "Scheduled task: Fetching daily Gmail report...")
-    success, msg, items = fetch_and_parse_gmail_report()
-    log_event("INFO" if success else "WARNING", f"Mail fetch result: {msg}")
+def scheduled_sheet_fetch():
+    log_event("INFO", "Scheduled task: Fetching watchlist from Google Sheets...")
+    success, msg, items = fetch_and_process_sheets()
+    log_event("INFO" if success else "WARNING", f"Sheet fetch result: {msg}")
 
 def scheduled_market_check():
     # Only runs during market hours or if forced
@@ -58,12 +59,12 @@ def scheduled_evening_watchlist():
 
 def start_scheduler():
     if not scheduler.running:
-        # 1. Evening Gmail Window: Poll every 15 minutes between 17:30 and 20:45 IST
-        # This guarantees catching the report whether it arrives early or delayed.
+        # 1. Evening Google Sheets Window: Poll every 15 minutes between 17:00 and 20:45 IST
+        # Deduplication ensures notifications are sent only once per day.
         scheduler.add_job(
-            scheduled_mail_fetch,
+            scheduled_sheet_fetch,
             CronTrigger(hour="17-20", minute="*/15", timezone=IST),
-            id="mail_fetch_job",
+            id="sheet_fetch_job",
             replace_existing=True
         )
         

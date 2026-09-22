@@ -1,9 +1,10 @@
 """
 Cloud Runner CLI for GitHub Actions & Automated Cloud Jobs.
 Usage:
-  python scripts/cloud_runner.py --task fetch-mail
+  python scripts/cloud_runner.py --task fetch-sheets
   python scripts/cloud_runner.py --task trade-cycle
   python scripts/cloud_runner.py --task daily-report
+  python scripts/cloud_runner.py --task evening-watchlist
 """
 import sys
 import argparse
@@ -17,23 +18,24 @@ if sys.platform.startswith("win"):
     sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 
 from backend.database import init_db, log_event
-from backend.mail_reader import fetch_and_parse_gmail_report
+from backend.sheet_reader import fetch_and_process_sheets
 from backend.trading_engine import run_trading_cycle
 from backend.notifier import send_daily_email_report
 
 def main():
     parser = argparse.ArgumentParser(description="Paper Trading Cloud Runner")
-    parser.add_argument("--task", choices=["fetch-mail", "trade-cycle", "daily-report", "evening-watchlist"], required=True, help="Task to execute")
+    parser.add_argument("--task", choices=["fetch-sheets", "fetch-mail", "trade-cycle", "daily-report", "evening-watchlist"], required=True, help="Task to execute")
     args = parser.parse_args()
 
     init_db()
 
-    if args.task == "fetch-mail":
-        print("[*] Executing Cloud Task: fetch-mail")
-        success, msg, items = fetch_and_parse_gmail_report()
+    if args.task in ("fetch-sheets", "fetch-mail"):
+        # 'fetch-mail' is kept as alias for backward compatibility with existing GitHub Actions
+        print("[*] Executing Cloud Task: fetch-sheets (Google Sheets)")
+        success, msg, items = fetch_and_process_sheets()
         print(f"Result: {msg}")
         if items:
-            print(f"[+] Loaded {len(items)} stocks into watchlist and dispatched evening candidate alerts.")
+            print(f"[+] Loaded {len(items)} candidate stocks into watchlist from Google Sheets.")
         if not success:
             sys.exit(1)
 

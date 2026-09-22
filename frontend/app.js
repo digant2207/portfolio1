@@ -221,7 +221,7 @@ function renderWatchlist() {
     if (filtered.length === 0) {
         el.watchlistTableBody.innerHTML = `
             <tr>
-                <td colspan="9" class="table-empty">No stocks in current filter view. Click "Sync Gmail" or "Paste Report" to load your 6 PM report.</td>
+                <td colspan="9" class="table-empty">No stocks in current filter view. Click "Sync Sheets" or "Paste Report" to load your watchlist.</td>
             </tr>
         `;
         return;
@@ -238,6 +238,10 @@ function renderWatchlist() {
             ? `<span class="badge badge-triggered">Triggered (Bought)</span>`
             : `<span class="badge badge-pending">Pending</span>`;
 
+        const signalBadge = item.signal 
+            ? `<span class="badge" style="background: rgba(234, 179, 8, 0.2); color: #eab308; margin-left: 6px; font-size: 11px;">🌟 ${item.signal}</span>`
+            : "";
+
         const livePrice = item.current_price || item.cmp_report;
         const triggerPrice = item.trigger_price;
         
@@ -252,7 +256,7 @@ function renderWatchlist() {
         rowsHtml += `
             <tr>
                 <td class="stock-symbol-cell">
-                    ${item.symbol}
+                    ${item.symbol}${signalBadge}
                     <span class="stock-name-sub">${item.stock_name}</span>
                 </td>
                 <td>${sectionBadge}</td>
@@ -431,11 +435,11 @@ function initActionButtons() {
         }
     });
 
-    // Sync Gmail
+    // Sync Sheets
     el.btnSyncEmail.addEventListener("click", async () => {
         try {
             el.btnSyncEmail.disabled = true;
-            el.btnSyncEmail.innerHTML = `<span class="btn-icon">⌛</span> Connecting Gmail...`;
+            el.btnSyncEmail.innerHTML = `<span class="btn-icon">⌛</span> Connecting Sheets...`;
             
             const res = await fetch(`${API_BASE}/api/actions/fetch-mail`, { method: "POST" });
             const data = await res.json();
@@ -447,10 +451,10 @@ function initActionButtons() {
                 showToast(data.message, "warning");
             }
         } catch (e) {
-            showToast(`Gmail sync failed: ${e.message}`, "error");
+            showToast(`Sheet sync failed: ${e.message}`, "error");
         } finally {
             el.btnSyncEmail.disabled = false;
-            el.btnSyncEmail.innerHTML = `<span class="btn-icon">📥</span> Sync Gmail`;
+            el.btnSyncEmail.innerHTML = `<span class="btn-icon">📊</span> Sync Sheets`;
         }
     });
 
@@ -503,20 +507,27 @@ function initModals() {
             const res = await fetch(`${API_BASE}/api/settings`);
             const cfg = await res.json();
             
-            document.getElementById("input-gmail-user").value = cfg.gmail_user || "";
-            document.getElementById("input-gmail-pwd").value = cfg.gmail_app_password || "";
-            document.getElementById("input-mail-subject").value = cfg.email_report_subject || "Daily smart money finder report";
-            document.getElementById("input-notify-recipient").value = cfg.notification_recipient || "";
-            document.getElementById("input-telegram-token").value = cfg.telegram_bot_token || "";
-            document.getElementById("input-telegram-chat-id").value = cfg.telegram_chat_id || "";
-            document.getElementById("input-total-capital").value = cfg.total_capital || 100000;
-            document.getElementById("input-trade-alloc").value = cfg.trade_allocation || 10000;
-            document.getElementById("input-trigger-buf").value = cfg.trigger_buffer_pct || 1.0;
-            document.getElementById("input-stop-loss").value = cfg.stop_loss_pct || 2.0;
-            document.getElementById("input-target").value = cfg.target_pct || 5.0;
-            document.getElementById("input-min-price").value = cfg.min_stock_price !== undefined ? cfg.min_stock_price : 20.0;
-            document.getElementById("input-min-vol").value = cfg.min_1m_avg_volume !== undefined ? cfg.min_1m_avg_volume : 10000;
-            document.getElementById("check-simulate-market").checked = !!cfg.simulate_market_hours;
+            const setVal = (id, val) => {
+                const elem = document.getElementById(id);
+                if (elem) elem.value = val !== undefined && val !== null ? val : "";
+            };
+            setVal("input-sheet-id-1", cfg.google_sheet_id_1 || "");
+            setVal("input-sheet-id-2", cfg.google_sheet_id_2 || "");
+            setVal("input-gmail-user", cfg.gmail_user || "");
+            setVal("input-gmail-pwd", cfg.gmail_app_password || "");
+            setVal("input-mail-subject", cfg.email_report_subject || "Daily smart money finder report");
+            setVal("input-notify-recipient", cfg.notification_recipient || "");
+            setVal("input-telegram-token", cfg.telegram_bot_token || "");
+            setVal("input-telegram-chat-id", cfg.telegram_chat_id || "");
+            setVal("input-total-capital", cfg.total_capital || 100000);
+            setVal("input-trade-alloc", cfg.trade_allocation || 10000);
+            setVal("input-trigger-buf", cfg.trigger_buffer_pct || 1.0);
+            setVal("input-stop-loss", cfg.stop_loss_pct || 2.0);
+            setVal("input-target", cfg.target_pct || 5.0);
+            setVal("input-min-price", cfg.min_stock_price !== undefined ? cfg.min_stock_price : 20.0);
+            setVal("input-min-vol", cfg.min_1m_avg_volume !== undefined ? cfg.min_1m_avg_volume : 10000);
+            const simEl = document.getElementById("check-simulate-market");
+            if (simEl) simEl.checked = !!cfg.simulate_market_hours;
             
             el.modalSettings.classList.add("active");
         } catch (e) {
@@ -564,21 +575,36 @@ function initModals() {
     // Save Settings
     document.getElementById("settings-form").addEventListener("submit", async (e) => {
         e.preventDefault();
+        const getVal = (id, fallback = "") => {
+            const elem = document.getElementById(id);
+            return elem ? elem.value.trim() : fallback;
+        };
+        const getNum = (id, fallback = 0) => {
+            const elem = document.getElementById(id);
+            return elem ? parseFloat(elem.value) || fallback : fallback;
+        };
+        const getInt = (id, fallback = 0) => {
+            const elem = document.getElementById(id);
+            return elem ? parseInt(elem.value, 10) || fallback : fallback;
+        };
+
         const payload = {
-            gmail_user: document.getElementById("input-gmail-user").value.trim(),
-            gmail_app_password: document.getElementById("input-gmail-pwd").value.trim(),
-            email_report_subject: document.getElementById("input-mail-subject").value.trim(),
-            notification_recipient: document.getElementById("input-notify-recipient").value.trim(),
-            telegram_bot_token: document.getElementById("input-telegram-token").value.trim(),
-            telegram_chat_id: document.getElementById("input-telegram-chat-id").value.trim(),
-            total_capital: parseFloat(document.getElementById("input-total-capital").value),
-            trade_allocation: parseFloat(document.getElementById("input-trade-alloc").value),
-            trigger_buffer_pct: parseFloat(document.getElementById("input-trigger-buf").value),
-            stop_loss_pct: parseFloat(document.getElementById("input-stop-loss").value),
-            target_pct: parseFloat(document.getElementById("input-target").value),
-            min_stock_price: parseFloat(document.getElementById("input-min-price").value),
-            min_1m_avg_volume: parseInt(document.getElementById("input-min-vol").value, 10),
-            simulate_market_hours: document.getElementById("check-simulate-market").checked
+            google_sheet_id_1: getVal("input-sheet-id-1"),
+            google_sheet_id_2: getVal("input-sheet-id-2"),
+            gmail_user: getVal("input-gmail-user"),
+            gmail_app_password: getVal("input-gmail-pwd"),
+            email_report_subject: getVal("input-mail-subject", "Daily smart money finder report"),
+            notification_recipient: getVal("input-notify-recipient"),
+            telegram_bot_token: getVal("input-telegram-token"),
+            telegram_chat_id: getVal("input-telegram-chat-id"),
+            total_capital: getNum("input-total-capital", 100000),
+            trade_allocation: getNum("input-trade-alloc", 10000),
+            trigger_buffer_pct: getNum("input-trigger-buf", 1.0),
+            stop_loss_pct: getNum("input-stop-loss", 2.0),
+            target_pct: getNum("input-target", 5.0),
+            min_stock_price: getNum("input-min-price", 20.0),
+            min_1m_avg_volume: getInt("input-min-vol", 10000),
+            simulate_market_hours: !!document.getElementById("check-simulate-market")?.checked
         };
         
         try {

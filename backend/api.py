@@ -17,7 +17,8 @@ from .database import (
     get_trades, get_logs, reset_portfolio, add_watchlist_items, log_event
 )
 from .market_data import get_market_status, simulate_price_update
-from .mail_reader import fetch_and_parse_gmail_report, parse_email_html_or_text, clean_symbol
+from .sheet_reader import fetch_and_process_sheets, clean_sheet_symbol
+from .mail_reader import parse_email_html_or_text, clean_symbol
 from .trading_engine import run_trading_cycle, manual_close_position
 from .notifier import generate_daily_report_html, send_daily_email_report
 from .scheduler import start_scheduler, stop_scheduler
@@ -42,10 +43,11 @@ app = FastAPI(title="Smart Money Paper Trading Terminal", lifespan=lifespan)
 class SettingsUpdate(BaseModel):
     gmail_user: Optional[str] = None
     gmail_app_password: Optional[str] = None
-    email_report_subject: Optional[str] = None
     notification_recipient: Optional[str] = None
     telegram_bot_token: Optional[str] = None
     telegram_chat_id: Optional[str] = None
+    google_sheet_id_1: Optional[str] = None
+    google_sheet_id_2: Optional[str] = None
     total_capital: Optional[float] = None
     trade_allocation: Optional[float] = None
     stop_loss_pct: Optional[float] = None
@@ -168,8 +170,9 @@ def api_test_telegram():
     return {"success": success, "message": msg}
 
 @app.post("/api/actions/fetch-mail")
-def api_action_fetch_mail():
-    success, msg, items = fetch_and_parse_gmail_report()
+def api_action_fetch_sheets():
+    """Fetches watchlist data from Google Sheets (replaces Gmail IMAP)."""
+    success, msg, items = fetch_and_process_sheets()
     return {"success": success, "message": msg, "count": len(items), "items": items}
 
 @app.post("/api/actions/parse-raw-mail")

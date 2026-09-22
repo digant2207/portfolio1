@@ -8,30 +8,131 @@ from datetime import datetime, date
 from typing import List, Dict, Any, Optional
 from .config import get_db_path, load_config
 
+_DB_INITIALIZED = False
+
+def _setup_tables(conn):
+    cursor = conn.cursor()
+    # Portfolio Summary Table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS portfolio_state (
+            id INTEGER PRIMARY KEY,
+            total_capital REAL NOT NULL,
+            cash_balance REAL NOT NULL,
+            invested_capital REAL NOT NULL,
+            realized_pnl REAL NOT NULL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    
+    # Watchlist Table (Parsed from Google Sheets or manual entry)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS watchlist (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            report_date TEXT NOT NULL,
+            stock_name TEXT NOT NULL,
+            symbol TEXT NOT NULL,
+            section TEXT NOT NULL,          -- 'above_200_dma' or 'below_200_dma'
+            cmp_report REAL NOT NULL,
+            dma_200 REAL NOT NULL,
+            trigger_price REAL NOT NULL,    -- 200 DMA + 1%
+            status TEXT DEFAULT 'PENDING',  -- 'PENDING', 'TRIGGERED', 'EXPIRED', 'SKIPPED'
+            current_price REAL,
+            last_checked TIMESTAMP,
+            golden_cross INTEGER DEFAULT 0, -- 1 if confirmed Golden Cross from Sheet 2
+            avg_volume_1m REAL DEFAULT 0,   -- 1-month avg volume from Google Sheet
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    
+    # Migration: add golden_cross and avg_volume_1m columns if missing (existing DBs)
+    try:
+        cursor.execute("ALTER TABLE watchlist ADD COLUMN golden_cross INTEGER DEFAULT 0")
+    except Exception:
+        pass
+    try:
+        cursor.execute("ALTER TABLE watchlist ADD COLUMN avg_volume_1m REAL DEFAULT 0")
+    except Exception:
+        pass
+    
+    # Open / Closed Positions
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS positions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            watchlist_id INTEGER,
+            stock_name TEXT NOT NULL,
+            symbol TEXT NOT NULL,
+            section TEXT NOT NULL,
+            buy_price REAL NOT NULL,
+            quantity INTEGER NOT NULL,
+            invested_amount REAL NOT NULL,
+            stop_loss REAL NOT NULL,        -- buy_price * 0.98 (-2%)
+            target_price REAL NOT NULL,     -- buy_price * 1.05 (+5%)
+            buy_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            current_price REAL,
+            unrealized_pnl REAL DEFAULT 0.0,
+            status TEXT DEFAULT 'OPEN',     -- 'OPEN', 'CLOSED'
+            close_price REAL,
+            close_timestamp TIMESTAMP,
+            realized_pnl REAL DEFAULT 0.0,
+            exit_reason TEXT                -- 'TARGET_HIT', 'STOP_LOSS_HIT', 'MANUAL'
+        )
+    """)
+    
+    # Trades execution log
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS trades (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            position_id INTEGER,
+            symbol TEXT NOT NULL,
+            stock_name TEXT NOT NULL,
+            trade_type TEXT NOT NULL,       -- 'BUY', 'SELL'
+            price REAL NOT NULL,
+            quantity INTEGER NOT NULL,
+            total_value REAL NOT NULL,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            pnl REAL DEFAULT 0.0,
+            exit_reason TEXT
+        )
+    """)
+    
+    # System activity & audit logs
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            level TEXT NOT NULL,            -- 'INFO', 'WARNING', 'ERROR', 'TRADE'
+            message TEXT NOT NULL,
+            details TEXT,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    
+    # Notification deduplication tracking table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS sent_notifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            report_date TEXT NOT NULL,
+            notification_type TEXT NOT NULL,  -- 'EVENING_WATCHLIST', 'DAILY_SUMMARY'
+            sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            details TEXT
+        )
+    """)
+    conn.commit()
+
 def get_db():
+    global _DB_INITIALIZED
     conn = sqlite3.connect(get_db_path(), timeout=30.0)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA busy_timeout=15000")
     conn.row_factory = sqlite3.Row
+    if not _DB_INITIALIZED:
+        _DB_INITIALIZED = True
+        _setup_tables(conn)
     return conn
 
 def init_db():
     cfg = load_config()
     with get_db() as conn:
         cursor = conn.cursor()
-        
-        # Portfolio Summary Table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS portfolio_state (
-                id INTEGER PRIMARY KEY,
-                total_capital REAL NOT NULL,
-                cash_balance REAL NOT NULL,
-                invested_capital REAL NOT NULL,
-                realized_pnl REAL NOT NULL,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
         # Initialize default portfolio if empty
         cursor.execute("SELECT COUNT(*) FROM portfolio_state")
         if cursor.fetchone()[0] == 0:
@@ -39,89 +140,7 @@ def init_db():
                 INSERT INTO portfolio_state (id, total_capital, cash_balance, invested_capital, realized_pnl)
                 VALUES (1, ?, ?, 0.0, 0.0)
             """, (cfg["total_capital"], cfg["total_capital"]))
-            
-        # Watchlist Table (Parsed from 6:00 PM email)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS watchlist (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                report_date TEXT NOT NULL,
-                stock_name TEXT NOT NULL,
-                symbol TEXT NOT NULL,
-                section TEXT NOT NULL,          -- 'above_200_dma' or 'below_200_dma'
-                cmp_report REAL NOT NULL,
-                dma_200 REAL NOT NULL,
-                trigger_price REAL NOT NULL,    -- 200 DMA + 1%
-                status TEXT DEFAULT 'PENDING',  -- 'PENDING', 'TRIGGERED', 'EXPIRED', 'SKIPPED'
-                current_price REAL,
-                last_checked TIMESTAMP,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
-        # Open / Closed Positions
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS positions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                watchlist_id INTEGER,
-                stock_name TEXT NOT NULL,
-                symbol TEXT NOT NULL,
-                section TEXT NOT NULL,
-                buy_price REAL NOT NULL,
-                quantity INTEGER NOT NULL,
-                invested_amount REAL NOT NULL,
-                stop_loss REAL NOT NULL,        -- buy_price * 0.98 (-2%)
-                target_price REAL NOT NULL,     -- buy_price * 1.05 (+5%)
-                buy_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                current_price REAL,
-                unrealized_pnl REAL DEFAULT 0.0,
-                status TEXT DEFAULT 'OPEN',     -- 'OPEN', 'CLOSED'
-                close_price REAL,
-                close_timestamp TIMESTAMP,
-                realized_pnl REAL DEFAULT 0.0,
-                exit_reason TEXT                -- 'TARGET_HIT', 'STOP_LOSS_HIT', 'MANUAL'
-            )
-        """)
-        
-        # Trades execution log
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS trades (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                position_id INTEGER,
-                symbol TEXT NOT NULL,
-                stock_name TEXT NOT NULL,
-                trade_type TEXT NOT NULL,       -- 'BUY', 'SELL'
-                price REAL NOT NULL,
-                quantity INTEGER NOT NULL,
-                total_value REAL NOT NULL,
-                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                pnl REAL DEFAULT 0.0,
-                exit_reason TEXT
-            )
-        """)
-        
-        # System activity & audit logs
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS logs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                level TEXT NOT NULL,            -- 'INFO', 'WARNING', 'ERROR', 'TRADE'
-                message TEXT NOT NULL,
-                details TEXT,
-                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
-        # Notification deduplication tracking table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS sent_notifications (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                report_date TEXT NOT NULL,
-                notification_type TEXT NOT NULL,  -- 'EVENING_WATCHLIST', 'DAILY_SUMMARY'
-                sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                details TEXT
-            )
-        """)
-        
-        conn.commit()
+            conn.commit()
 
 def is_notification_sent(report_date: str, notification_type: str) -> bool:
     """Checks if a specific notification has already been dispatched on the given date."""
@@ -213,12 +232,15 @@ def add_watchlist_items(items: List[Dict[str, Any]]) -> int:
             cursor.execute("""
                 INSERT INTO watchlist (
                     report_date, stock_name, symbol, section,
-                    cmp_report, dma_200, trigger_price, status
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, 'PENDING')
+                    cmp_report, dma_200, trigger_price, status,
+                    golden_cross, avg_volume_1m
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, 'PENDING', ?, ?)
             """, (
                 item["report_date"], item["stock_name"], item["symbol"],
                 item["section"], item["cmp_report"], item["dma_200"],
-                item["trigger_price"]
+                item["trigger_price"],
+                1 if item.get("golden_cross") else 0,
+                item.get("avg_volume_1m", 0)
             ))
             added += 1
         conn.commit()

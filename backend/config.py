@@ -31,13 +31,15 @@ DEFAULT_CONFIG = {
     "min_stock_price": 20.0,    # Ignore stocks with CMP <= 20
     "min_1m_avg_volume": 10000, # Ignore stocks with 1-month avg volume < 10,000
     
-    # Gmail Configuration
+    # Google Sheets Data Source
+    "google_sheet_id_1": "1B__Wam6da-nD7ReSg2JlHwu5pH7xDHlkQkBjSzF9YdA",  # Smart Money 200 DMA Report
+    "google_sheet_id_2": "1_rWhyap8gO-u8ehP1vDCiad-RwnFjGBCn2R5qiis4_A",  # DMA Signal Tracker
+    
+    # Gmail SMTP Configuration (for sending notifications only)
     "gmail_user": "",
     "gmail_app_password": "",
-    "gmail_imap_server": "imap.gmail.com",
     "gmail_smtp_server": "smtp.gmail.com",
     "gmail_smtp_port": 587,
-    "email_report_subject": "Daily smart money finder report",
     "notification_recipient": "",
     
     # Telegram Configuration
