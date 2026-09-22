@@ -6,7 +6,7 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from datetime import datetime, date
-from typing import Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 from .config import load_config
 from .database import (
     get_portfolio_summary, get_open_positions, get_trades,
