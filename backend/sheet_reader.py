@@ -43,10 +43,29 @@ def parse_number(val: Any) -> float:
     return 0.0
 
 
+# Known ticker aliases mapping shorthand sheet names or numeric codes to valid NSE/BSE tickers
+SYMBOL_ALIASES = {
+    "SUPREME": "SUPREMEIND.NS",
+    "SUPREME.NS": "SUPREMEIND.NS",
+    "SUNDARAM": "SUNDARMFIN.NS",
+    "SUNDARAM.NS": "SUNDARMFIN.NS",
+    "RAJOO": "RAJOOENG.NS",
+    "RAJOO.NS": "RAJOOENG.NS",
+    "522257": "RAJOOENG.NS",
+    "522257.NS": "RAJOOENG.NS",
+    "522257.BO": "RAJOOENG.NS",
+    "JINDAL": "JINDALPHOT.NS",
+    "JINDAL.NS": "JINDALPHOT.NS",
+    "AJANTA": "519216.BO",
+    "AJANTA.NS": "519216.BO",
+    "ANSAL": "ANSALBUIL.BO",
+    "ANSAL.NS": "ANSALBUIL.BO",
+}
+
 def clean_sheet_symbol(raw_symbol: str) -> str:
     """
-    Normalizes sheet symbol to NSE ticker format ending with .NS.
-    Handles formats like 'NSE:RELIANCE', 'RELIANCE', 'reliance', '512068' (BSE code).
+    Normalizes sheet symbol to NSE/BSE ticker format.
+    Resolves known aliases (e.g. SUPREME -> SUPREMEIND.NS, RAJOO -> RAJOOENG.NS).
     """
     clean = str(raw_symbol).strip()
     if not clean:
@@ -57,12 +76,16 @@ def clean_sheet_symbol(raw_symbol: str) -> str:
         clean = clean.split(":", 1)[1]
     
     clean = clean.strip().upper()
-    
-    # Skip pure numeric BSE codes — they may not map cleanly to .NS
-    # but keep them with .NS suffix anyway for yfinance compatibility
     if not clean:
         return ""
     
+    # Check alias map
+    if clean in SYMBOL_ALIASES:
+        return SYMBOL_ALIASES[clean]
+    clean_ns = f"{clean}.NS"
+    if clean_ns in SYMBOL_ALIASES:
+        return SYMBOL_ALIASES[clean_ns]
+        
     if not clean.endswith(".NS") and not clean.endswith(".BO"):
         return f"{clean}.NS"
     return clean

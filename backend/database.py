@@ -302,6 +302,7 @@ def get_nearest_breakout_candidates(limit: int = 10, min_price: float = None, mi
         for r in rows:
             item = dict(r)
             cmp = item.get("current_price") or item.get("cmp_report", 0.0)
+            item["current_price"] = cmp
             trig = item.get("trigger_price", 0.0)
             avg_vol = float(item.get("avg_volume_1m") or 0.0)
             
