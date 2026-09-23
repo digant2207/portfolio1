@@ -32,9 +32,8 @@ DEFAULT_CONFIG = {
     "min_1m_avg_volume": 10000, # Ignore stocks with 1-month avg volume < 10,000
     "only_above_200_dma": True, # Strictly buy only stocks above 200 DMA; exclude below 200 DMA
     
-    # Google Sheets Data Source
-    "google_sheet_id_1": "1B__Wam6da-nD7ReSg2JlHwu5pH7xDHlkQkBjSzF9YdA",  # Smart Money 200 DMA Report
-    "google_sheet_id_2": "1_rWhyap8gO-u8ehP1vDCiad-RwnFjGBCn2R5qiis4_A",  # DMA Signal Tracker
+    # Google Sheets Data Source (Unified Sheet)
+    "google_sheet_id": "1EKaY7YGSgQWnPrs57naHhJCSHp7VJ_PvXdFhzBfow1w",
     
     # Gmail SMTP Configuration (for sending notifications only)
     "gmail_user": "",
@@ -65,25 +64,29 @@ def load_config() -> dict:
             
     # Allow Environment Variables (e.g. from GitHub Actions Secrets or Cloud hosting)
     env_user = os.environ.get("GMAIL_USER")
-    if env_user:
+    if env_user and env_user.strip():
         config["gmail_user"] = env_user.strip()
         
     env_pwd = os.environ.get("GMAIL_APP_PASSWORD")
-    if env_pwd:
+    if env_pwd and env_pwd.strip():
         config["gmail_app_password"] = env_pwd.strip()
         
     env_recipient = os.environ.get("NOTIFICATION_RECIPIENT")
-    if env_recipient:
+    if env_recipient and env_recipient.strip():
         config["notification_recipient"] = env_recipient.strip()
 
     env_tg_token = os.environ.get("TELEGRAM_BOT_TOKEN")
-    if env_tg_token:
+    if env_tg_token and env_tg_token.strip():
         config["telegram_bot_token"] = env_tg_token.strip()
 
     env_tg_chat = os.environ.get("TELEGRAM_CHAT_ID")
-    if env_tg_chat:
+    if env_tg_chat and env_tg_chat.strip():
         config["telegram_chat_id"] = env_tg_chat.strip()
         
+    env_sheet_id = os.environ.get("GOOGLE_SHEET_ID")
+    if env_sheet_id and env_sheet_id.strip():
+        config["google_sheet_id"] = env_sheet_id.strip()
+
     env_port = os.environ.get("PORT")
     if env_port:
         try:

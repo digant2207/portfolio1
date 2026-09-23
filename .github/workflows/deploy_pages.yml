@@ -9,6 +9,7 @@ on:
       - 'styles.css'
       - 'app.js'
       - 'data/portfolio_snapshot.json'
+      - 'portfolio_snapshot.json'
       - 'frontend/**'
   workflow_dispatch:
 

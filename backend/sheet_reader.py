@@ -1,14 +1,7 @@
 """
 Google Sheets CSV reader module for Smart Money 200 DMA Paper Trading Engine.
-Replaces Gmail email parsing with direct Google Sheets CSV export.
-
-Sheet 1 (Smart Money 200 DMA Report):
-  Columns: Symbol, Name, CMP, 5 DMA, ..., 200 DMA, Output, Volume, 1 Month Avg Volume, Change %, Change (₹)
-  Output signal: "Best for Buy Above 200 DMA", "Best for Sell Below 200 DMA", or "Avoid"
-
-Sheet 2 (DMA Signal Tracker):
-  Columns: Symbol, Stock Name, Current Price (₹), Volume, 1 Month Avg Volume, 50 DMA (₹), 200 DMA (₹), ..., DMA Signal
-  DMA Signal: "Golden Cross" or "Death Cross"
+Reads unified single Google Sheet containing 757+ stocks with technical indicators,
+moving averages (50 DMA, 200 DMA), liquidity metrics, and DMA cross signals.
 """
 import csv
 import io
@@ -20,20 +13,20 @@ from typing import List, Dict, Any, Tuple, Optional
 from .config import load_config
 from .database import log_event, add_watchlist_items
 
-# Default Google Sheet IDs (configurable via config.json)
-DEFAULT_SHEET_ID_1 = "1B__Wam6da-nD7ReSg2JlHwu5pH7xDHlkQkBjSzF9YdA"
-DEFAULT_SHEET_ID_2 = "1_rWhyap8gO-u8ehP1vDCiad-RwnFjGBCn2R5qiis4_A"
+# Default Unified Google Sheet ID (configurable via config.json)
+DEFAULT_SHEET_ID = "1EKaY7YGSgQWnPrs57naHhJCSHp7VJ_PvXdFhzBfow1w"
 
+GVIZ_URL_TEMPLATE = "https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&gid={gid}"
 EXPORT_URL_TEMPLATE = "https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
 
 
 def parse_number(val: Any) -> float:
-    """Safely extracts float from string with currencies, commas, etc."""
+    """Safely extracts float from string with currencies, commas, percentages, etc."""
     if isinstance(val, (int, float)):
         return float(val)
     if not val:
         return 0.0
-    text = str(val).replace(",", "").replace("₹", "").replace("Rs.", "").replace("Rs", "").strip()
+    text = str(val).replace(",", "").replace("₹", "").replace("Rs.", "").replace("Rs", "").replace("%", "").strip()
     match = re.search(r"[-+]?\d*\.?\d+", text)
     if match:
         try:
@@ -65,7 +58,7 @@ SYMBOL_ALIASES = {
 def clean_sheet_symbol(raw_symbol: str) -> str:
     """
     Normalizes sheet symbol to NSE/BSE ticker format.
-    Resolves known aliases (e.g. SUPREME -> SUPREMEIND.NS, RAJOO -> RAJOOENG.NS).
+    Resolves known aliases and formats numeric BSE codes properly.
     """
     clean = str(raw_symbol).strip()
     if not clean:
@@ -85,6 +78,10 @@ def clean_sheet_symbol(raw_symbol: str) -> str:
     clean_ns = f"{clean}.NS"
     if clean_ns in SYMBOL_ALIASES:
         return SYMBOL_ALIASES[clean_ns]
+
+    # Numeric symbols are standard BSE scrip codes
+    if clean.isdigit():
+        return f"{clean}.BO"
         
     if not clean.endswith(".NS") and not clean.endswith(".BO"):
         return f"{clean}.NS"
@@ -94,19 +91,32 @@ def clean_sheet_symbol(raw_symbol: str) -> str:
 def fetch_sheet_csv(sheet_id: str, gid: int = 0) -> Tuple[bool, str, str]:
     """
     Downloads public Google Sheet as CSV text.
+    First tries Google Visualization CSV endpoint (which evaluates all formulas),
+    with fallback to standard /export?format=csv.
     Returns (success, message, csv_text).
     """
-    url = EXPORT_URL_TEMPLATE.format(sheet_id=sheet_id, gid=gid)
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) PaperTradingBot/2.0"}
+
+    # 1. Try GViz CSV endpoint (guarantees dynamic formula columns are evaluated)
+    gviz_url = GVIZ_URL_TEMPLATE.format(sheet_id=sheet_id, gid=gid)
     try:
-        req = urllib.request.Request(
-            url,
-            headers={"User-Agent": "PaperTradingBot/2.0"}
-        )
+        req = urllib.request.Request(gviz_url, headers=headers)
+        with urllib.request.urlopen(req, timeout=30) as response:
+            csv_text = response.read().decode("utf-8", errors="ignore")
+            if csv_text and len(csv_text) >= 100:
+                return True, "OK (GViz)", csv_text
+    except Exception as gviz_err:
+        log_event("DEBUG", f"GViz CSV fetch failed ({gviz_err}), attempting standard export URL...")
+
+    # 2. Fallback to standard export URL
+    export_url = EXPORT_URL_TEMPLATE.format(sheet_id=sheet_id, gid=gid)
+    try:
+        req = urllib.request.Request(export_url, headers=headers)
         with urllib.request.urlopen(req, timeout=30) as response:
             csv_text = response.read().decode("utf-8", errors="ignore")
             if not csv_text or len(csv_text) < 50:
                 return False, f"Empty or too-small response from sheet {sheet_id}", ""
-            return True, "OK", csv_text
+            return True, "OK (Standard Export)", csv_text
     except urllib.error.HTTPError as e:
         return False, f"HTTP error fetching sheet {sheet_id}: {e.code} {e.reason}", ""
     except urllib.error.URLError as e:
@@ -115,58 +125,77 @@ def fetch_sheet_csv(sheet_id: str, gid: int = 0) -> Tuple[bool, str, str]:
         return False, f"Error fetching sheet {sheet_id}: {str(e)}", ""
 
 
-def parse_smart_money_sheet(csv_text: str) -> List[Dict[str, Any]]:
+def parse_combined_sheet(csv_text: str) -> List[Dict[str, Any]]:
     """
-    Parses Sheet 1 (Smart Money 200 DMA Report) CSV.
-    Expected columns: Symbol, Name, CMP, ..., 200 DMA, Output, Volume, 1 Month Avg Volume, Change %, Change (₹)
-    Returns list of candidate items where Output != 'Avoid'.
+    Parses single unified Google Sheet CSV.
+    Expected columns: Symbol, Stock Name, Current Price (₹), Volume, 1 Month Avg Volume,
+                     Vol. %, 5 DMA, 10 DMA, 20 DMA, 50 DMA (₹), 100 DMA, 200 DMA (₹),
+                     52W High (₹), 52W Low (₹), DMA Signal, Transetion Day, Trigger, Stop Loss
+
+    Applies the existing (old) trading logic:
+    - Filters: CMP > min_stock_price (₹20), 1M Avg Volume >= min_1m_avg_volume (10,000)
+    - Trend Section: 'above_200_dma' when CMP >= 200 DMA (only_above_200_dma = True)
+    - Trigger Price = round(200 DMA * (1 + trigger_buffer_pct / 100.0), 2)
+    - Golden Cross: True if DMA Signal == 'Golden Cross'
     """
     cfg = load_config()
     buffer_pct = cfg.get("trigger_buffer_pct", 1.0)
     min_price = cfg.get("min_stock_price", 20.0)
     min_volume = cfg.get("min_1m_avg_volume", 10000.0)
+    only_above_200 = cfg.get("only_above_200_dma", True)
     today_str = datetime.now().strftime("%Y-%m-%d")
     results = []
-    
+
     reader = csv.DictReader(io.StringIO(csv_text))
-    
-    for row in reader:
+
+    for raw_row in reader:
         try:
-            # Get the Output/signal column
-            output_signal = str(row.get("Output", "")).strip()
-            
-            # Only keep Buy or Sell candidates — skip "Avoid" and empty
-            if not output_signal or output_signal.lower() == "avoid":
-                continue
-            
-            # Determine section from signal
-            signal_lower = output_signal.lower()
-            if "buy" in signal_lower or "above" in signal_lower:
-                section = "above_200_dma"
-            elif "sell" in signal_lower or "below" in signal_lower:
-                section = "below_200_dma"
-            else:
+            # Clean keys by stripping spaces
+            row = {k.strip(): v.strip() for k, v in raw_row.items() if k}
+
+            raw_symbol = row.get("Symbol", "")
+            if not raw_symbol:
                 continue
 
-            # Strict Filter: Only buy above 200 DMA — skip below 200 DMA candidates until instructed
-            if cfg.get("only_above_200_dma", True) and section == "below_200_dma":
-                continue
-            
-            raw_symbol = str(row.get("Symbol", "")).strip()
             symbol = clean_sheet_symbol(raw_symbol)
             if not symbol:
                 continue
-            
-            stock_name = str(row.get("Name", "")).strip() or raw_symbol
-            cmp_val = parse_number(row.get("CMP", 0))
-            dma_200 = parse_number(row.get("200 DMA", 0))
-            volume = parse_number(row.get("Volume", 0))
-            avg_vol_1m = parse_number(row.get("1 Month Avg Volume", 0))
-            change_pct_raw = str(row.get("Change %", "")).strip().replace("%", "")
-            change_pct = parse_number(change_pct_raw) if change_pct_raw else 0.0
-            
-            if cmp_val <= 0 or dma_200 <= 0:
-                continue
+
+            stock_name = row.get("Stock Name", "") or raw_symbol
+
+            # Current market price & moving averages
+            cmp_val = parse_number(row.get("Current Price (₹)") or row.get("Current Price") or row.get("CMP"))
+            dma_200 = parse_number(row.get("200 DMA (₹)") or row.get("200 DMA"))
+            dma_50 = parse_number(row.get("50 DMA (₹)") or row.get("50 DMA"))
+            volume = parse_number(row.get("Volume"))
+            avg_vol_1m = parse_number(row.get("1 Month Avg Volume"))
+            vol_pct = parse_number(row.get("Vol. %"))
+            dma_signal = str(row.get("DMA Signal", "")).strip()
+
+            # Custom Trigger and Stop Loss from Google Sheet
+            raw_trig_str = str(row.get("Trigger", "")).strip()
+            sheet_trig_val = parse_number(raw_trig_str) if raw_trig_str else 0.0
+
+            raw_sl_str = str(row.get("Stop Loss", "")).strip()
+            sheet_sl_val = parse_number(raw_sl_str) if raw_sl_str else 0.0
+
+            # If user explicitly specifies a trigger price in the sheet, prioritize it
+            if sheet_trig_val > 0:
+                trigger_price = round(sheet_trig_val, 2)
+                section = "above_200_dma"
+            else:
+                if cmp_val <= 0 or dma_200 <= 0:
+                    continue
+
+                # Trend condition: Above 200 DMA
+                is_above_200 = (cmp_val >= dma_200)
+                section = "above_200_dma" if is_above_200 else "below_200_dma"
+
+                if only_above_200 and section == "below_200_dma":
+                    continue
+
+                # Breakout trigger price: 200 DMA + 1% buffer
+                trigger_price = round(dma_200 * (1 + (buffer_pct / 100.0)), 2)
 
             # Strict Filter 1: Ignore penny stocks (CMP <= 20)
             if cmp_val <= min_price:
@@ -175,9 +204,9 @@ def parse_smart_money_sheet(csv_text: str) -> List[Dict[str, Any]]:
             # Strict Filter 2: Ignore illiquid stocks (1-Month Avg Daily Volume < 10,000)
             if avg_vol_1m > 0 and avg_vol_1m < min_volume:
                 continue
-            
-            trigger_price = round(dma_200 * (1 + (buffer_pct / 100.0)), 2)
-            
+
+            is_golden = (dma_signal.lower() == "golden cross")
+
             results.append({
                 "report_date": today_str,
                 "stock_name": stock_name,
@@ -185,104 +214,102 @@ def parse_smart_money_sheet(csv_text: str) -> List[Dict[str, Any]]:
                 "section": section,
                 "cmp_report": cmp_val,
                 "dma_200": dma_200,
+                "dma_50": dma_50,
                 "trigger_price": trigger_price,
+                "sheet_trigger": round(sheet_trig_val, 2) if sheet_trig_val > 0 else None,
+                "sheet_stop_loss": round(sheet_sl_val, 2) if sheet_sl_val > 0 else None,
+                "sheet_stop_loss_raw": raw_sl_str if raw_sl_str else None,
                 "avg_volume_1m": avg_vol_1m,
                 "volume_today": volume,
-                "change_pct": change_pct,
-                "golden_cross": False  # Updated later from Sheet 2
+                "vol_pct": vol_pct,
+                "golden_cross": is_golden,
+                "dma_signal": dma_signal
             })
         except Exception:
             continue
-    
+
     return results
-
-
-def parse_dma_signal_sheet(csv_text: str) -> Dict[str, str]:
-    """
-    Parses Sheet 2 (DMA Signal Tracker) CSV.
-    Returns dict mapping SYMBOL.NS -> signal ('Golden Cross' or 'Death Cross').
-    """
-    signals = {}
-    reader = csv.DictReader(io.StringIO(csv_text))
-    
-    for row in reader:
-        try:
-            raw_symbol = str(row.get("Symbol", "")).strip()
-            if not raw_symbol:
-                continue
-            symbol = clean_sheet_symbol(raw_symbol)
-            if not symbol:
-                continue
-            
-            dma_signal = str(row.get("DMA Signal", "")).strip()
-            if dma_signal and dma_signal.lower() != "neutral":
-                signals[symbol] = dma_signal
-        except Exception:
-            continue
-    
-    return signals
 
 
 def fetch_and_process_sheets() -> Tuple[bool, str, List[Dict[str, Any]]]:
     """
-    Main entry point — replaces fetch_and_parse_gmail_report().
-    1. Fetches both Google Sheets as CSV
-    2. Parses Sheet 1 for Buy/Sell candidates
-    3. Cross-references Sheet 2 for Golden Cross confirmation
-    4. Adds to watchlist DB
-    5. Dispatches evening watchlist notification (once per day)
-    Returns (success, message, items).
+    Main entry point for Google Sheets ingestion.
+    1. Fetches unified single Google Sheet as CSV.
+    2. Parses candidate stocks (incorporating custom Trigger and Stop Loss column values).
+    3. Adds qualified candidates to watchlist DB.
+    4. Checks open holdings against sheet Stop Loss — triggers immediate exit & Telegram alert if hit!
+    5. Dispatches evening watchlist notification (email + Telegram) once per day.
+    Returns (success, message, candidates).
     """
     cfg = load_config()
-    sheet_id_1 = cfg.get("google_sheet_id_1", DEFAULT_SHEET_ID_1)
-    sheet_id_2 = cfg.get("google_sheet_id_2", DEFAULT_SHEET_ID_2)
+    sheet_id = cfg.get("google_sheet_id") or cfg.get("google_sheet_id_1") or DEFAULT_SHEET_ID
     today_str = datetime.now().strftime("%Y-%m-%d")
-    
-    # 1. Fetch Sheet 1 (Smart Money 200 DMA)
-    ok1, msg1, csv1 = fetch_sheet_csv(sheet_id_1)
-    if not ok1:
-        log_event("ERROR", f"Failed to fetch Google Sheet 1: {msg1}")
-        return False, f"Google Sheet 1 fetch failed: {msg1}", []
-    
-    # 2. Parse Sheet 1 candidates
-    candidates = parse_smart_money_sheet(csv1)
+
+    # 1. Fetch Google Sheet CSV
+    ok, msg, csv_text = fetch_sheet_csv(sheet_id)
+    if not ok:
+        log_event("ERROR", f"Failed to fetch Google Sheet ({sheet_id}): {msg}")
+        return False, f"Google Sheet fetch failed: {msg}", []
+
+    # 2. Parse candidates
+    candidates = parse_combined_sheet(csv_text)
     if not candidates:
-        log_event("INFO", "Sheet 1 fetched successfully but no Buy/Sell candidates found (all 'Avoid').")
-        return True, "No Buy/Sell candidates in today's sheet (all marked 'Avoid').", []
-    
-    # 3. Fetch Sheet 2 (DMA Signal Tracker) — optional, non-fatal
-    dma_signals = {}
-    ok2, msg2, csv2 = fetch_sheet_csv(sheet_id_2)
-    if ok2:
-        dma_signals = parse_dma_signal_sheet(csv2)
-        log_event("INFO", f"Sheet 2 loaded: {len(dma_signals)} DMA signals parsed.")
-    else:
-        log_event("WARNING", f"Sheet 2 fetch failed (non-fatal): {msg2}. Proceeding without Golden Cross data.")
-    
-    # 4. Cross-reference Sheet 2 signals into candidates
-    golden_count = 0
-    for item in candidates:
-        sym = item["symbol"]
-        signal = dma_signals.get(sym, "")
-        if signal.lower() == "golden cross":
-            item["golden_cross"] = True
-            golden_count += 1
-    
-    # 5. Sort candidates: Golden Cross first, then by section (Buy above Sell), then by symbol
+        log_event("INFO", "Google Sheet fetched successfully, but no stocks matched current screening filters.")
+        return True, "No candidate stocks matched current screening filters.", []
+
+    # 3. Sort candidates: Custom Triggers first, then Golden Cross, then by symbol
+    golden_count = sum(1 for c in candidates if c.get("golden_cross"))
+    custom_trig_count = sum(1 for c in candidates if c.get("sheet_trigger"))
     candidates.sort(key=lambda x: (
-        not x.get("golden_cross", False),  # Golden Cross first
-        0 if x["section"] == "above_200_dma" else 1,  # Buy above Sell
+        not bool(x.get("sheet_trigger")),   # Explicit custom triggers highest priority
+        not x.get("golden_cross", False),   # Golden Cross next
+        0 if x["section"] == "above_200_dma" else 1,
         x["symbol"]
     ))
-    
-    # 6. Add to watchlist DB
+
+    # 4. Add to watchlist DB
     added = add_watchlist_items(candidates)
-    log_event("INFO", f"Google Sheets: Parsed {len(candidates)} candidate stocks ({golden_count} Golden Cross). {added} new added to watchlist.")
-    
-    # 7. Dispatch evening watchlist notification (email + Telegram) — ONCE PER DAY
+    log_event("INFO", f"Google Sheets: Parsed {len(candidates)} candidate stocks ({golden_count} Golden Cross, {custom_trig_count} custom triggers). {added} new added to watchlist.")
+
+    # 5. Check if any currently open position has an indicated Stop Loss in the sheet
+    try:
+        from .database import get_open_positions, update_position_stop_loss
+        from .trading_engine import execute_stop_loss_exit
+        from .market_data import fetch_current_prices
+
+        open_positions = get_open_positions()
+        if open_positions:
+            candidate_map = {c["symbol"]: c for c in candidates}
+            symbols_to_check = [p["symbol"] for p in open_positions if p["symbol"] in candidate_map]
+            live_quotes = fetch_current_prices(symbols_to_check) if symbols_to_check else {}
+
+            for pos in open_positions:
+                pos_sym = pos["symbol"]
+                sheet_item = candidate_map.get(pos_sym)
+                if not sheet_item:
+                    continue
+
+                raw_sl = sheet_item.get("sheet_stop_loss_raw")
+                sl_num = sheet_item.get("sheet_stop_loss")
+                if not raw_sl and not sl_num:
+                    continue
+
+                cmp_val = live_quotes.get(pos_sym) or pos.get("current_price") or pos.get("buy_price")
+                is_exit_signal = str(raw_sl).strip().upper() in ["EXIT", "SL", "SELL", "CLOSE", "HIT", "STOP LOSS", "STOPLOSS"]
+
+                if is_exit_signal or (sl_num and sl_num > 0 and cmp_val <= sl_num):
+                    execute_stop_loss_exit(pos, cmp_val, exit_reason="STOP_LOSS_HIT")
+                    log_event("TRADE", f"🛑 Position {pos_sym} closed due to Google Sheet Stop-Loss indicator: {raw_sl or sl_num}")
+                elif sl_num and sl_num > 0 and sl_num != pos.get("stop_loss"):
+                    update_position_stop_loss(pos["id"], sl_num)
+                    log_event("INFO", f"Updated Stop-Loss on holding {pos_sym} to ₹{sl_num:.2f} based on Google Sheet.")
+    except Exception as sl_check_err:
+        log_event("WARNING", f"Error checking holdings against sheet stop loss: {sl_check_err}")
+
+    # 5. Dispatch evening watchlist notification (email + Telegram) — ONCE PER DAY
     from .database import is_notification_sent, record_notification_sent
     already_sent = is_notification_sent(today_str, "EVENING_WATCHLIST")
-    
+
     if not already_sent:
         try:
             from .notifier import send_evening_watchlist_email, notify_evening_watchlist_telegram
@@ -294,5 +321,5 @@ def fetch_and_process_sheets() -> Tuple[bool, str, List[Dict[str, Any]]]:
             log_event("WARNING", f"Evening watchlist notification dispatch warning: {notify_err}")
     else:
         log_event("INFO", f"Evening candidate watchlist for {today_str} already dispatched today. Skipping duplicate notifications.")
-    
+
     return True, f"Successfully fetched {len(candidates)} candidate stocks from Google Sheets. {added} added to watchlist. {golden_count} confirmed Golden Cross.", candidates

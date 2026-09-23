@@ -53,6 +53,7 @@ jobs:
           NOTIFICATION_RECIPIENT: ${{ secrets.NOTIFICATION_RECIPIENT }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
           TZ: 'Asia/Kolkata'
         run: |
           CURRENT_HOUR=$(date +%H)
@@ -98,6 +99,6 @@ jobs:
           if git diff --staged --quiet; then
             echo "No database or snapshot changes to commit."
           else
-            git commit -m "Auto-update portfolio state & snapshot [skip ci]"
+            git commit -m "Auto-update portfolio state & snapshot"
             git push
           fi

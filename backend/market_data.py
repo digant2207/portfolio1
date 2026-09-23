@@ -3,11 +3,15 @@ Market data fetcher for NSE/BSE equities.
 Uses yfinance to fetch live/latest traded price (LTP/CMP) and checks Indian market hours.
 """
 from datetime import datetime, time
+import logging
 import pytz
 import yfinance as yf
 from typing import Dict, List, Optional, Any
 from .config import load_config
 from .database import log_event
+
+# Suppress yfinance noisy connection and download warnings
+logging.getLogger("yfinance").setLevel(logging.CRITICAL)
 
 IST = pytz.timezone("Asia/Kolkata")
 
@@ -69,37 +73,49 @@ def fetch_current_prices(symbols: List[str]) -> Dict[str, float]:
     if not to_fetch:
         return results
         
-    try:
-        # yfinance download or Ticker.fast_info
-        # For batch, download is fast
-        batch_tickers = " ".join(to_fetch)
-        data = yf.Tickers(batch_tickers)
-        
-        for sym in to_fetch:
-            try:
-                ticker = data.tickers.get(sym)
-                if not ticker:
-                    continue
-                info = getattr(ticker, "fast_info", None)
-                price = None
-                if info and hasattr(info, "last_price") and info.last_price:
-                    price = float(info.last_price)
-                elif info and hasattr(info, "regular_market_price") and info.regular_market_price:
-                    price = float(info.regular_market_price)
+    # Fetch in chunks of 50 using multi-threaded yf.download
+    chunk_size = 50
+    for i in range(0, len(to_fetch), chunk_size):
+        chunk = to_fetch[i:i + chunk_size]
+        try:
+            df = yf.download(tickers=chunk, period="1d", interval="1d", progress=False, group_by="ticker", threads=True)
+            if not df.empty:
+                if len(chunk) == 1:
+                    s = chunk[0]
+                    if "Close" in df.columns:
+                        series = df["Close"].dropna()
+                        if not series.empty and float(series.iloc[-1]) > 0:
+                            results[s] = round(float(series.iloc[-1]), 2)
+                            _price_cache[s] = {"price": results[s], "timestamp": now_ts}
                 else:
-                    # Fallback to history 1d
-                    hist = ticker.history(period="1d", interval="1m")
-                    if not hist.empty:
-                        price = float(hist["Close"].iloc[-1])
-                        
-                if price and price > 0:
-                    results[sym] = round(price, 2)
-                    _price_cache[sym] = {"price": round(price, 2), "timestamp": now_ts}
-            except Exception as item_err:
+                    for s in chunk:
+                        try:
+                            if hasattr(df.columns, 'levels') and s in df.columns.levels[0]:
+                                t_df = df[s]
+                                if "Close" in t_df.columns:
+                                    series = t_df["Close"].dropna()
+                                    if not series.empty and float(series.iloc[-1]) > 0:
+                                        results[s] = round(float(series.iloc[-1]), 2)
+                                        _price_cache[s] = {"price": results[s], "timestamp": now_ts}
+                        except Exception:
+                            pass
+        except Exception as batch_err:
+            log_event("DEBUG", f"Batch download error for chunk: {batch_err}")
+
+    # Fallback for any un-fetched symbol via fast_info
+    missing = [s for s in to_fetch if s not in results]
+    if missing and len(missing) <= 10:
+        for sym in missing:
+            try:
+                t = yf.Ticker(sym)
+                info = getattr(t, "fast_info", None)
+                p = getattr(info, "last_price", None) or getattr(info, "regular_market_price", None)
+                if p and float(p) > 0:
+                    results[sym] = round(float(p), 2)
+                    _price_cache[sym] = {"price": results[sym], "timestamp": now_ts}
+            except Exception:
                 pass
-    except Exception as e:
-        log_event("WARNING", f"Market data fetch error for symbols {to_fetch}: {e}")
-        
+                
     return results
 
 def simulate_price_update(symbol: str, target_price: float):

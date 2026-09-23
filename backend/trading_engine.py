@@ -16,6 +16,60 @@ from .database import (
 from .market_data import is_market_open, fetch_current_prices, fetch_monthly_average_volume
 from .notifier import notify_trade_buy, notify_trade_sell
 
+def execute_stop_loss_exit(pos: Dict[str, Any], cmp: float, exit_reason: str = "STOP_LOSS_HIT") -> Dict[str, Any]:
+    """
+    Closes an open position upon hitting Stop Loss or receiving an explicit exit signal from the sheet.
+    Updates position status, portfolio cash balance & realized P&L, records trade,
+    and dispatches instant Telegram alert.
+    """
+    pos_id = pos["id"]
+    sym = pos["symbol"]
+    stock_name = pos["stock_name"]
+    buy_price = pos["buy_price"]
+    qty = pos["quantity"]
+    realized_pnl = round((cmp - buy_price) * qty, 2)
+    proceeds = round(cmp * qty, 2)
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE positions SET 
+                status = 'CLOSED', close_price = ?, close_timestamp = CURRENT_TIMESTAMP,
+                realized_pnl = ?, exit_reason = ?
+            WHERE id = ?
+        """, (cmp, realized_pnl, exit_reason, pos_id))
+        
+        cursor.execute("""
+            UPDATE portfolio_state SET 
+                cash_balance = cash_balance + ?,
+                realized_pnl = realized_pnl + ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = 1
+        """, (proceeds, realized_pnl))
+        
+        cursor.execute("""
+            INSERT INTO trades (
+                position_id, symbol, stock_name, trade_type, price,
+                quantity, total_value, pnl, exit_reason
+            ) VALUES (?, ?, ?, 'SELL', ?, ?, ?, ?, ?)
+        """, (pos_id, sym, stock_name, cmp, qty, proceeds, realized_pnl, exit_reason))
+        
+        msg = f"🛑 STOP-LOSS HIT: Sold {qty} {sym} @ ₹{cmp} (Buy: ₹{buy_price}, P&L: ₹{realized_pnl})"
+        log_event("TRADE", msg, conn=conn)
+        conn.commit()
+
+    try:
+        notify_trade_sell({
+            "symbol": sym, "stock_name": stock_name, "exit_reason": exit_reason,
+            "price": cmp, "buy_price": buy_price, "quantity": qty, "pnl": realized_pnl, "proceeds": proceeds
+        })
+    except Exception as tg_err:
+        log_event("WARNING", f"Telegram alert error on SL exit: {tg_err}")
+
+    return {
+        "symbol": sym, "price": cmp, "buy_price": buy_price, "pnl": realized_pnl
+    }
+
 def run_trading_cycle(force_market_open: bool = False) -> Dict[str, Any]:
     """
     Executes one trading evaluation cycle:
@@ -69,49 +123,8 @@ def run_trading_cycle(force_market_open: bool = False) -> Dict[str, Any]:
             
             # Check Stop-Loss
             if cmp <= sl:
-                realized_pnl = round((cmp - buy_price) * qty, 2)
-                proceeds = round(cmp * qty, 2)
-                
-                # Close position
-                cursor.execute("""
-                    UPDATE positions SET 
-                        status = 'CLOSED', close_price = ?, close_timestamp = CURRENT_TIMESTAMP,
-                        realized_pnl = ?, exit_reason = 'STOP_LOSS_HIT'
-                    WHERE id = ?
-                """, (cmp, realized_pnl, pos_id))
-                
-                # Update portfolio cash & realized P&L
-                cursor.execute("""
-                    UPDATE portfolio_state SET 
-                        cash_balance = cash_balance + ?,
-                        realized_pnl = realized_pnl + ?,
-                        updated_at = CURRENT_TIMESTAMP
-                    WHERE id = 1
-                """, (proceeds, realized_pnl))
-                
-                # Log trade
-                cursor.execute("""
-                    INSERT INTO trades (
-                        position_id, symbol, stock_name, trade_type, price,
-                        quantity, total_value, pnl, exit_reason
-                    ) VALUES (?, ?, ?, 'SELL', ?, ?, ?, ?, 'STOP_LOSS_HIT')
-                """, (pos_id, sym, pos["stock_name"], cmp, qty, proceeds, realized_pnl))
-                
-                msg = f"🛑 STOP-LOSS HIT: Sold {qty} {sym} @ ₹{cmp} (Buy: ₹{buy_price}, P&L: ₹{realized_pnl})"
-                log_event("TRADE", msg, conn=conn)
-                
-                # Instant Telegram Notification
-                try:
-                    notify_trade_sell({
-                        "symbol": sym, "stock_name": pos["stock_name"], "exit_reason": "STOP_LOSS_HIT",
-                        "price": cmp, "buy_price": buy_price, "quantity": qty, "pnl": realized_pnl, "proceeds": proceeds
-                    })
-                except Exception as tg_err:
-                    log_event("WARNING", f"Telegram alert error on SL exit: {tg_err}")
-                    
-                cycle_summary["stop_losses_hit"].append({
-                    "symbol": sym, "price": cmp, "buy_price": buy_price, "pnl": realized_pnl
-                })
+                trade_record = execute_stop_loss_exit(pos, cmp, exit_reason="STOP_LOSS_HIT")
+                cycle_summary["stop_losses_hit"].append(trade_record)
                 
             # Check Target
             elif cmp >= target:
@@ -225,7 +238,12 @@ def run_trading_cycle(force_market_open: bool = False) -> Dict[str, Any]:
                     continue
                     
                 invested = round(qty * cmp, 2)
-                sl_price = round(cmp * (1 - (sl_pct / 100.0)), 2)
+                # Stop Loss: use custom sheet_stop_loss if specified in sheet, else default 2%
+                sheet_sl = item.get("sheet_stop_loss")
+                if sheet_sl and float(sheet_sl) > 0:
+                    sl_price = round(float(sheet_sl), 2)
+                else:
+                    sl_price = round(cmp * (1 - (sl_pct / 100.0)), 2)
                 target_price = round(cmp * (1 + (target_pct / 100.0)), 2)
                 
                 # Deduct cash

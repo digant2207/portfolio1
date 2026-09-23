@@ -47,6 +47,7 @@ class SettingsUpdate(BaseModel):
     notification_recipient: Optional[str] = None
     telegram_bot_token: Optional[str] = None
     telegram_chat_id: Optional[str] = None
+    google_sheet_id: Optional[str] = None
     google_sheet_id_1: Optional[str] = None
     google_sheet_id_2: Optional[str] = None
     total_capital: Optional[float] = None

@@ -54,6 +54,18 @@ def _setup_tables(conn):
         cursor.execute("ALTER TABLE watchlist ADD COLUMN avg_volume_1m REAL DEFAULT 0")
     except Exception:
         pass
+    try:
+        cursor.execute("ALTER TABLE watchlist ADD COLUMN sheet_trigger REAL DEFAULT NULL")
+    except Exception:
+        pass
+    try:
+        cursor.execute("ALTER TABLE watchlist ADD COLUMN sheet_stop_loss REAL DEFAULT NULL")
+    except Exception:
+        pass
+    try:
+        cursor.execute("ALTER TABLE watchlist ADD COLUMN sheet_stop_loss_raw TEXT DEFAULT NULL")
+    except Exception:
+        pass
     
     # Open / Closed Positions
     cursor.execute("""
@@ -224,6 +236,10 @@ def add_watchlist_items(items: List[Dict[str, Any]]) -> int:
         for item in items:
             avg_vol = float(item.get("avg_volume_1m") or 0.0)
 
+            sheet_trig = item.get("sheet_trigger")
+            sheet_sl = item.get("sheet_stop_loss")
+            sheet_sl_raw = item.get("sheet_stop_loss_raw")
+
             # Update existing or insert new
             cursor.execute("""
                 SELECT id FROM watchlist 
@@ -237,12 +253,16 @@ def add_watchlist_items(items: List[Dict[str, Any]]) -> int:
                         golden_cross = CASE WHEN ? = 1 THEN 1 ELSE golden_cross END,
                         cmp_report = ?,
                         dma_200 = ?,
-                        trigger_price = ?
+                        trigger_price = ?,
+                        sheet_trigger = ?,
+                        sheet_stop_loss = ?,
+                        sheet_stop_loss_raw = ?
                     WHERE id = ?
                 """, (
                     avg_vol, avg_vol,
                     1 if item.get("golden_cross") else 0,
                     item["cmp_report"], item["dma_200"], item["trigger_price"],
+                    sheet_trig, sheet_sl, sheet_sl_raw,
                     row["id"]
                 ))
                 continue
@@ -251,18 +271,25 @@ def add_watchlist_items(items: List[Dict[str, Any]]) -> int:
                 INSERT INTO watchlist (
                     report_date, stock_name, symbol, section,
                     cmp_report, dma_200, trigger_price, status,
-                    golden_cross, avg_volume_1m
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, 'PENDING', ?, ?)
+                    golden_cross, avg_volume_1m,
+                    sheet_trigger, sheet_stop_loss, sheet_stop_loss_raw
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, 'PENDING', ?, ?, ?, ?, ?)
             """, (
                 item["report_date"], item["stock_name"], item["symbol"],
                 item["section"], item["cmp_report"], item["dma_200"],
                 item["trigger_price"],
                 1 if item.get("golden_cross") else 0,
-                avg_vol
+                avg_vol,
+                sheet_trig, sheet_sl, sheet_sl_raw
             ))
             added += 1
         conn.commit()
     return added
+
+def update_position_stop_loss(position_id: int, stop_loss: float):
+    with get_db() as conn:
+        conn.execute("UPDATE positions SET stop_loss = ? WHERE id = ?", (round(stop_loss, 2), position_id))
+        conn.commit()
 
 def get_pending_watchlist() -> List[Dict[str, Any]]:
     cfg = load_config()

@@ -7,6 +7,7 @@
   "trigger_buffer_pct": 1.0,
   "min_stock_price": 20.0,
   "min_1m_avg_volume": 10000,
+  "google_sheet_id": "1EKaY7YGSgQWnPrs57naHhJCSHp7VJ_PvXdFhzBfow1w",
   "gmail_user": "your_email@gmail.com",
   "gmail_app_password": "your_16_char_app_password",
   "gmail_imap_server": "imap.gmail.com",

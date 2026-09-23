@@ -243,7 +243,8 @@ async function refreshAllData() {
             const snapshotPaths = [
                 "./data/portfolio_snapshot.json",
                 "./portfolio_snapshot.json",
-                "../data/portfolio_snapshot.json"
+                "../data/portfolio_snapshot.json",
+                "https://raw.githubusercontent.com/digant2207/portfolio1/main/data/portfolio_snapshot.json"
             ];
             let snap = null;
             for (const path of snapshotPaths) {
@@ -1068,8 +1069,7 @@ function initModals() {
                     const elem = document.getElementById(id);
                     if (elem) elem.value = val !== undefined && val !== null ? val : "";
                 };
-                setVal("input-sheet-id-1", cfg.google_sheet_id_1 || "");
-                setVal("input-sheet-id-2", cfg.google_sheet_id_2 || "");
+                setVal("input-sheet-id", cfg.google_sheet_id || cfg.google_sheet_id_1 || "");
                 setVal("input-gmail-user", cfg.gmail_user || "");
                 setVal("input-gmail-pwd", cfg.gmail_app_password || "");
                 setVal("input-telegram-token", cfg.telegram_bot_token || "");
@@ -1100,8 +1100,8 @@ function initModals() {
         const getInt = (id, fallback = 0) => parseInt(document.getElementById(id)?.value, 10) || fallback;
 
         const payload = {
-            google_sheet_id_1: getVal("input-sheet-id-1"),
-            google_sheet_id_2: getVal("input-sheet-id-2"),
+            google_sheet_id: getVal("input-sheet-id"),
+            google_sheet_id_1: getVal("input-sheet-id"),
             gmail_user: getVal("input-gmail-user"),
             gmail_app_password: getVal("input-gmail-pwd"),
             telegram_bot_token: getVal("input-telegram-token"),
