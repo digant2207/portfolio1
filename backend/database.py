@@ -4,6 +4,7 @@ Stores portfolio state, daily watchlists, open positions, trade history, and log
 """
 import sqlite3
 import json
+import math
 from datetime import datetime, date
 from typing import List, Dict, Any, Optional
 from .config import get_db_path, load_config
@@ -376,3 +377,112 @@ def get_logs(limit: int = 60) -> List[Dict[str, Any]]:
     with get_db() as conn:
         rows = conn.execute("SELECT * FROM logs ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
         return [dict(r) for r in rows]
+
+def update_watchlist_status(watchlist_id: int, status: str) -> bool:
+    """Updates the status of a watchlist stock (e.g. 'REJECTED', 'PENDING')."""
+    with get_db() as conn:
+        row = conn.execute("SELECT symbol, stock_name, status FROM watchlist WHERE id = ?", (watchlist_id,)).fetchone()
+        if not row:
+            return False
+        conn.execute("UPDATE watchlist SET status = ? WHERE id = ?", (status, watchlist_id))
+        conn.commit()
+        log_event("INFO", f"Watchlist stock {row['symbol']} status changed from {row['status']} to {status}", conn=conn)
+        return True
+
+def get_today_trades() -> List[Dict[str, Any]]:
+    """Returns trades executed on the current date."""
+    today_prefix = datetime.now().strftime("%Y-%m-%d")
+    with get_db() as conn:
+        rows = conn.execute("""
+            SELECT * FROM trades 
+            WHERE timestamp LIKE ? OR date(timestamp) = date('now', 'localtime')
+            ORDER BY id DESC
+        """, (f"{today_prefix}%",)).fetchall()
+        return [dict(r) for r in rows]
+
+def get_upcoming_trades(limit: int = 100) -> List[Dict[str, Any]]:
+    """
+    Returns screened watchlist items that are candidates for upcoming buy triggers.
+    Includes both PENDING and REJECTED items so the user can see and toggle their status.
+    Calculates proximity percentage and distance to trigger price.
+    """
+    cfg = load_config()
+    trade_alloc = cfg.get("trade_allocation", 10000.0)
+    with get_db() as conn:
+        rows = conn.execute("""
+            SELECT * FROM watchlist 
+            WHERE status IN ('PENDING', 'REJECTED')
+            ORDER BY id DESC
+        """).fetchall()
+        items = []
+        for r in rows:
+            it = dict(r)
+            cmp = it.get("current_price") or it.get("cmp_report") or 0.0
+            trig = it.get("trigger_price") or 0.0
+            
+            diff_pct = round(((trig - cmp) / trig) * 100, 2) if trig > 0 else 0.0
+            abs_dist = round(abs(trig - cmp) / trig * 100, 2) if trig > 0 else 0.0
+            prox_pct = round((cmp / trig) * 100, 1) if trig > 0 else 0.0
+            is_crossed = cmp >= trig if trig > 0 else False
+            
+            est_qty = int(math.floor(trade_alloc / cmp)) if cmp > 0 else 0
+            
+            it["distance_pct"] = diff_pct
+            it["abs_distance_pct"] = abs_dist
+            it["proximity_pct"] = prox_pct
+            it["is_crossed"] = is_crossed
+            it["est_quantity"] = est_qty
+            it["est_allocation"] = trade_alloc
+            items.append(it)
+            
+        # Sort so ready stocks come first, sorted by nearest to breakout trigger
+        items.sort(key=lambda x: (x["status"] == "REJECTED", x["abs_distance_pct"]))
+        return items[:limit]
+
+def export_portfolio_snapshot(export_path: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Exports a comprehensive JSON snapshot of the portfolio state.
+    Used for GitHub Pages and static mobile dashboards.
+    """
+    from pathlib import Path
+    from .config import BASE_DIR
+    summary = get_portfolio_summary()
+    positions = get_open_positions()
+    today_trades = get_today_trades()
+    all_trades = get_trades(limit=100)
+    upcoming = get_upcoming_trades(limit=100)
+    
+    today_realized_pnl = sum(t.get("pnl", 0.0) for t in today_trades if t.get("trade_type") == "SELL")
+    
+    snapshot = {
+        "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S IST"),
+        "date": datetime.now().strftime("%Y-%m-%d"),
+        "portfolio": {
+            **summary,
+            "today_realized_pnl": round(today_realized_pnl, 2),
+            "today_trades_count": len(today_trades)
+        },
+        "positions": positions,
+        "today_trades": today_trades,
+        "all_trades": all_trades,
+        "upcoming_trades": upcoming
+    }
+    
+    target_paths = [
+        BASE_DIR / "data" / "portfolio_snapshot.json",
+        BASE_DIR / "frontend" / "portfolio_snapshot.json",
+        BASE_DIR / "portfolio_snapshot.json"
+    ]
+    if export_path:
+        target_paths.append(Path(export_path))
+        
+    for p in target_paths:
+        try:
+            p.parent.mkdir(parents=True, exist_ok=True)
+            with open(p, "w", encoding="utf-8") as f:
+                json.dump(snapshot, f, indent=2)
+        except Exception as e:
+            print(f"Warning writing snapshot to {p}: {e}")
+            
+    return snapshot
+

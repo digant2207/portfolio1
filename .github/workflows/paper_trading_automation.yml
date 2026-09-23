@@ -90,14 +90,14 @@ jobs:
             fi
           fi
 
-      - name: Commit & Push Updated Database State
+      - name: Commit & Push Updated Database & Snapshot State
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/portfolio.db
+          git add data/portfolio.db data/portfolio_snapshot.json frontend/portfolio_snapshot.json portfolio_snapshot.json
           if git diff --staged --quiet; then
-            echo "No database changes to commit."
+            echo "No database or snapshot changes to commit."
           else
-            git commit -m "Auto-update portfolio state [skip ci]"
+            git commit -m "Auto-update portfolio state & snapshot [skip ci]"
             git push
           fi

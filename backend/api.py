@@ -14,7 +14,8 @@ from typing import Optional, List, Dict, Any
 from .config import load_config, save_config, BASE_DIR
 from .database import (
     init_db, get_portfolio_summary, get_all_watchlist, get_open_positions,
-    get_trades, get_logs, reset_portfolio, add_watchlist_items, log_event
+    get_trades, get_logs, reset_portfolio, add_watchlist_items, log_event,
+    update_watchlist_status, get_today_trades, get_upcoming_trades, export_portfolio_snapshot
 )
 from .market_data import get_market_status, simulate_price_update
 from .sheet_reader import fetch_and_process_sheets, clean_sheet_symbol
@@ -67,6 +68,9 @@ class ManualStockInput(BaseModel):
     cmp_report: float
     dma_200: float
 
+class StatusUpdateInput(BaseModel):
+    status: str  # 'PENDING' or 'REJECTED'
+
 class SimulatePriceInput(BaseModel):
     symbol: str
     price: float
@@ -88,9 +92,44 @@ def get_status():
 def api_get_portfolio():
     return get_portfolio_summary()
 
+@app.get("/api/portfolio/snapshot")
+def api_get_snapshot():
+    return export_portfolio_snapshot()
+
 @app.get("/api/watchlist")
 def api_get_watchlist():
     return get_all_watchlist(limit=100)
+
+@app.get("/api/trades/upcoming")
+def api_get_upcoming_trades(limit: int = 100):
+    return get_upcoming_trades(limit=limit)
+
+@app.post("/api/watchlist/{watchlist_id}/reject")
+def api_reject_watchlist(watchlist_id: int):
+    success = update_watchlist_status(watchlist_id, "REJECTED")
+    if not success:
+        raise HTTPException(status_code=404, detail="Watchlist stock not found.")
+    export_portfolio_snapshot()
+    return {"success": True, "status": "REJECTED", "message": f"Upcoming trade {watchlist_id} stopped/rejected. Buying skipped."}
+
+@app.post("/api/watchlist/{watchlist_id}/restore")
+def api_restore_watchlist(watchlist_id: int):
+    success = update_watchlist_status(watchlist_id, "PENDING")
+    if not success:
+        raise HTTPException(status_code=404, detail="Watchlist stock not found.")
+    export_portfolio_snapshot()
+    return {"success": True, "status": "PENDING", "message": f"Upcoming trade {watchlist_id} restored to pending."}
+
+@app.post("/api/watchlist/{watchlist_id}/status")
+def api_update_watchlist_status(watchlist_id: int, payload: StatusUpdateInput):
+    st = payload.status.upper()
+    if st not in ("PENDING", "REJECTED", "SKIPPED"):
+        raise HTTPException(status_code=400, detail="Invalid status. Must be PENDING or REJECTED.")
+    success = update_watchlist_status(watchlist_id, st)
+    if not success:
+        raise HTTPException(status_code=404, detail="Watchlist item not found.")
+    export_portfolio_snapshot()
+    return {"success": True, "status": st, "message": f"Stock status updated to {st}."}
 
 @app.post("/api/watchlist")
 def api_add_manual_watchlist(item: ManualStockInput):
@@ -110,6 +149,7 @@ def api_add_manual_watchlist(item: ManualStockInput):
     }]
     count = add_watchlist_items(new_item)
     log_event("INFO", f"Manually added {sym} to watchlist (Trigger: ₹{trigger})")
+    export_portfolio_snapshot()
     return {"success": True, "added": count, "symbol": sym, "trigger_price": trigger}
 
 @app.get("/api/positions")
@@ -121,11 +161,18 @@ def api_close_position(position_id: int):
     success = manual_close_position(position_id)
     if not success:
         raise HTTPException(status_code=404, detail="Open position not found or already closed.")
+    export_portfolio_snapshot()
     return {"success": True, "message": f"Position {position_id} successfully closed."}
 
 @app.get("/api/trades")
 def api_get_trades():
     return get_trades(limit=100)
+
+@app.get("/api/trades/today")
+def api_get_today_trades():
+    trades = get_today_trades()
+    realized = sum(t.get("pnl", 0.0) for t in trades if t.get("trade_type") == "SELL")
+    return {"trades": trades, "count": len(trades), "realized_pnl": round(realized, 2)}
 
 @app.get("/api/logs")
 def api_get_logs():
@@ -173,6 +220,7 @@ def api_test_telegram():
 def api_action_fetch_sheets():
     """Fetches watchlist data from Google Sheets (replaces Gmail IMAP)."""
     success, msg, items = fetch_and_process_sheets()
+    export_portfolio_snapshot()
     return {"success": success, "message": msg, "count": len(items), "items": items}
 
 @app.post("/api/actions/parse-raw-mail")
@@ -183,11 +231,13 @@ def api_action_parse_raw_mail(payload: RawMailInput):
         return {"success": False, "message": "Could not identify stock records in the provided text/HTML.", "count": 0}
     added = add_watchlist_items(parsed)
     log_event("INFO", f"Parsed {len(parsed)} stocks from manual report input. {added} added to watchlist.")
+    export_portfolio_snapshot()
     return {"success": True, "message": f"Successfully parsed {len(parsed)} stocks ({added} added).", "count": len(parsed), "items": parsed}
 
 @app.post("/api/actions/run-cycle")
 def api_action_run_cycle(force_market_open: bool = Body(False, embed=True)):
     res = run_trading_cycle(force_market_open=force_market_open)
+    export_portfolio_snapshot()
     return {"success": True, "summary": res}
 
 @app.post("/api/actions/simulate-price")
@@ -226,11 +276,34 @@ def api_send_watchlist_report():
 @app.post("/api/actions/reset-portfolio")
 def api_reset_portfolio():
     reset_portfolio()
+    export_portfolio_snapshot()
     return {"success": True, "message": "Portfolio has been reset to ₹1,00,000 baseline."}
 
 # Serve frontend static files
 if FRONTEND_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
+
+@app.get("/styles.css")
+def serve_styles():
+    p = FRONTEND_DIR / "styles.css"
+    if p.exists():
+        return FileResponse(p, media_type="text/css")
+    raise HTTPException(status_code=404)
+
+@app.get("/app.js")
+def serve_app_js():
+    p = FRONTEND_DIR / "app.js"
+    if p.exists():
+        return FileResponse(p, media_type="application/javascript")
+    raise HTTPException(status_code=404)
+
+@app.get("/portfolio_snapshot.json")
+@app.get("/data/portfolio_snapshot.json")
+def serve_snapshot():
+    p = BASE_DIR / "data" / "portfolio_snapshot.json"
+    if p.exists():
+        return FileResponse(p, media_type="application/json")
+    return export_portfolio_snapshot()
 
 @app.get("/")
 def serve_index():

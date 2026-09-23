@@ -17,14 +17,14 @@ if sys.platform.startswith("win"):
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
     sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 
-from backend.database import init_db, log_event
+from backend.database import init_db, log_event, export_portfolio_snapshot
 from backend.sheet_reader import fetch_and_process_sheets
 from backend.trading_engine import run_trading_cycle
 from backend.notifier import send_daily_email_report
 
 def main():
     parser = argparse.ArgumentParser(description="Paper Trading Cloud Runner")
-    parser.add_argument("--task", choices=["fetch-sheets", "fetch-mail", "trade-cycle", "daily-report", "evening-report", "evening-watchlist"], required=True, help="Task to execute")
+    parser.add_argument("--task", choices=["fetch-sheets", "fetch-mail", "trade-cycle", "daily-report", "evening-report", "evening-watchlist", "export-snapshot"], required=True, help="Task to execute")
     args = parser.parse_args()
 
     init_db()
@@ -36,6 +36,7 @@ def main():
         print(f"Result: {msg}")
         if items:
             print(f"[+] Loaded {len(items)} candidate stocks into watchlist from Google Sheets.")
+        export_portfolio_snapshot()
         if not success:
             sys.exit(1)
 
@@ -43,6 +44,12 @@ def main():
         print("[*] Executing Cloud Task: trade-cycle")
         summary = run_trading_cycle(force_market_open=False)
         print(f"Result: {len(summary.get('buys_triggered', []))} buys, {len(summary.get('targets_hit', []))} targets, {len(summary.get('stop_losses_hit', []))} stop-losses.")
+        export_portfolio_snapshot()
+
+    elif args.task == "export-snapshot":
+        print("[*] Executing Cloud Task: export-snapshot")
+        snap = export_portfolio_snapshot()
+        print(f"Result: Portfolio snapshot exported with {len(snap.get('upcoming_trades', []))} upcoming trades.")
 
     elif args.task in ("daily-report", "evening-report", "evening-watchlist"):
         print("[*] Executing Cloud Task: daily-report (Unified 6:30 PM Email & Telegram Report)")
@@ -63,6 +70,7 @@ def main():
                 record_notification_sent(today_str, "DAILY_REPORT_630", msg)
             if not success:
                 sys.exit(1)
+        export_portfolio_snapshot()
 
 if __name__ == "__main__":
     main()

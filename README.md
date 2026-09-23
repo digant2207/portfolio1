@@ -75,9 +75,31 @@ You don't need to wait for scheduled times:
 
 ---
 
-## 💻 Optional: Running Local Web Dashboard on PC
+## 📱 Mobile & Laptop Web Dashboard (Live on GitHub Pages)
 
-If you ever want to view the live dark-mode dashboard on your local PC:
+Access your complete portfolio from your mobile phone or laptop browser anytime at:
+👉 **`https://digant2207.github.io/portfolio1/`**
+
+### Dashboard Features:
+- 📊 **Current Portfolio Value**: Live Net Worth, Available Cash, Invested Capital, and Realized & Unrealized P&L.
+- 💼 **Current Positions**: Active stock holdings, buy price, current CMP, live P&L, Stop-Loss (-2%) vs Target (+5%) visual range gauge, and manual close option.
+- ⚡ **Today's Trades**: Dedicated view of buy orders and profit/loss exits executed today.
+- 🎯 **Upcoming Trades with 🛑 Stop / Reject Control**:
+  - Live screened breakout candidates approaching 200 DMA + 1%.
+  - Distance % to trigger, volume, and Golden Cross confirmation.
+  - **🛑 Stop / Reject Button**: One-click action to stop automated buying for any stock.
+  - **↺ Restore Button**: One-click action to re-enable stopped trades.
+- 📱 **Mobile & Laptop Optimized**:
+  - Thumb-friendly sticky bottom navigation on phones.
+  - Dedicated mobile card views (no horizontal scrolling required).
+  - High-performance widescreen tables on laptops.
+  - Automatic cloud snapshot sync every 15 minutes via GitHub Actions.
+
+---
+
+## 💻 Running Local Web Dashboard on PC
+
+If you ever want to run the live interactive dashboard with local trading engine on your PC:
 ```powershell
 .\.venv\Scripts\python.exe run.py
 ```
