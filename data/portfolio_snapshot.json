@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-23 17:31:15 IST",
+  "generated_at": "2026-09-23 17:45:45 IST",
   "date": "2026-09-23",
   "portfolio": {
     "initial_capital": 100000.0,
@@ -516,7 +516,7 @@
       "last_checked": null,
       "created_at": "2026-09-23 11:30:48",
       "golden_cross": 0,
-      "avg_volume_1m": 175976.0,
+      "avg_volume_1m": 180381.0,
       "distance_pct": 5.8,
       "abs_distance_pct": 5.8,
       "proximity_pct": 94.2,
@@ -670,7 +670,7 @@
       "last_checked": "2026-09-23 09:45:35",
       "created_at": "2026-09-23 06:59:27",
       "golden_cross": 0,
-      "avg_volume_1m": 4903902.0,
+      "avg_volume_1m": 4868147.0,
       "distance_pct": 10.42,
       "abs_distance_pct": 10.42,
       "proximity_pct": 89.6,
