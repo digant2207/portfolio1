@@ -124,6 +124,10 @@ def parse_smart_money_sheet(csv_text: str) -> List[Dict[str, Any]]:
                 section = "below_200_dma"
             else:
                 continue
+
+            # Strict Filter: Only buy above 200 DMA — skip below 200 DMA candidates until instructed
+            if cfg.get("only_above_200_dma", True) and section == "below_200_dma":
+                continue
             
             raw_symbol = str(row.get("Symbol", "")).strip()
             symbol = clean_sheet_symbol(raw_symbol)

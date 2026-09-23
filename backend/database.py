@@ -268,30 +268,36 @@ def get_pending_watchlist() -> List[Dict[str, Any]]:
     cfg = load_config()
     min_price = cfg.get("min_stock_price", 20.0)
     min_volume = cfg.get("min_1m_avg_volume", 10000.0)
+    only_above = cfg.get("only_above_200_dma", True)
     with get_db() as conn:
-        # Exclude confirmed low-volume stocks and penny stocks
-        rows = conn.execute("""
+        section_clause = "AND section = 'above_200_dma'" if only_above else ""
+        query = f"""
             SELECT * FROM watchlist 
             WHERE status = 'PENDING' 
+              {section_clause}
               AND cmp_report > ?
               AND (avg_volume_1m >= ? OR avg_volume_1m = 0)
             ORDER BY id ASC
-        """, (min_price, min_volume)).fetchall()
+        """
+        rows = conn.execute(query, (min_price, min_volume)).fetchall()
         return [dict(r) for r in rows]
 
 def get_nearest_breakout_candidates(limit: int = 10, min_price: float = None, min_volume: float = None) -> List[Dict[str, Any]]:
     """
     Returns candidate stocks sorted by proximity to their 200 DMA + 1% breakout trigger.
     Strictly filters out penny stocks (CMP <= min_price) and illiquid stocks (1-month avg volume < min_volume).
+    Filters only 'above_200_dma' when only_above_200_dma is active.
     """
     cfg = load_config()
     if min_price is None:
         min_price = cfg.get("min_stock_price", 20.0)
     if min_volume is None:
         min_volume = cfg.get("min_1m_avg_volume", 10000.0)
+    only_above = cfg.get("only_above_200_dma", True)
 
     with get_db() as conn:
-        rows = conn.execute("SELECT * FROM watchlist WHERE status = 'PENDING'").fetchall()
+        section_clause = "AND section = 'above_200_dma'" if only_above else ""
+        rows = conn.execute(f"SELECT * FROM watchlist WHERE status = 'PENDING' {section_clause}").fetchall()
         candidates = []
         for r in rows:
             item = dict(r)
@@ -408,12 +414,16 @@ def get_upcoming_trades(limit: int = 100) -> List[Dict[str, Any]]:
     """
     cfg = load_config()
     trade_alloc = cfg.get("trade_allocation", 10000.0)
+    only_above = cfg.get("only_above_200_dma", True)
     with get_db() as conn:
-        rows = conn.execute("""
+        section_clause = "AND section = 'above_200_dma'" if only_above else ""
+        query = f"""
             SELECT * FROM watchlist 
             WHERE status IN ('PENDING', 'REJECTED')
+              {section_clause}
             ORDER BY id DESC
-        """).fetchall()
+        """
+        rows = conn.execute(query).fetchall()
         items = []
         for r in rows:
             it = dict(r)

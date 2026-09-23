@@ -30,6 +30,7 @@ DEFAULT_CONFIG = {
     "trigger_buffer_pct": 1.0,  # 200 DMA + 1%
     "min_stock_price": 20.0,    # Ignore stocks with CMP <= 20
     "min_1m_avg_volume": 10000, # Ignore stocks with 1-month avg volume < 10,000
+    "only_above_200_dma": True, # Strictly buy only stocks above 200 DMA; exclude below 200 DMA
     
     # Google Sheets Data Source
     "google_sheet_id_1": "1B__Wam6da-nD7ReSg2JlHwu5pH7xDHlkQkBjSzF9YdA",  # Smart Money 200 DMA Report

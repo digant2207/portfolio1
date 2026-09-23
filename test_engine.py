@@ -68,13 +68,13 @@ def test_full_pipeline():
     for it in items:
         print(f"  * {it['symbol']} | Section: {it['section']} | CMP: Rs. {it['cmp_report']} | 200 DMA: Rs. {it['dma_200']} | Buy Trigger: Rs. {it['trigger_price']}")
     
-    assert len(items) == 6, f"Expected 6 parsed items, got {len(items)}"
+    assert len(items) == 5, f"Expected 5 parsed above_200_dma items (below_200_dma filtered out), got {len(items)}"
     tatamotors = next(i for i in items if "TATAMOTORS" in i["symbol"])
     assert tatamotors["trigger_price"] == 969.60, f"Expected 969.60, got {tatamotors['trigger_price']}"
     
     added = add_watchlist_items(items)
-    assert added == 6, f"Expected 6 added to DB, got {added}"
-    print(f"[OK] Watchlist successfully populated with {added} stocks.")
+    assert added == 5, f"Expected 5 added to DB, got {added}"
+    print(f"[OK] Watchlist successfully populated with {added} stocks (all above 200 DMA).")
 
     print("\n--- 3. Testing CMP > 20 and Volume > 10,000 Filter Execution ---")
     # Simulate prices & volumes
@@ -122,24 +122,39 @@ def test_full_pipeline():
     assert p2["realized_pnl"] > 0, f"Expected positive realized P&L, got {p2['realized_pnl']}"
     print(f"[OK] Target Hit! Realized Profit: Rs. {p2['realized_pnl']:,.2f} | Total Capital: Rs. {p2['total_portfolio_value']:,.2f}")
 
-    print("\n--- 5. Testing Selection from 'Best for Sell' List with Trigger Criteria ---")
-    # HDFCBANK is from below_200_dma list in email (200 DMA 1650 -> trigger 1666.50)
-    # When CMP reaches 1670 (> 1666.50), CMP > 20, volume >= 10000 -> Should BUY
-    simulate_price_update("HDFCBANK.NS", 1670.00)
+    print("\n--- 5. Testing 'Below 200 DMA' Exclusion & Stop-Loss (-2%) Exit ---")
+    # 5a. Verify that a below_200_dma item is strictly ignored and NOT bought even if price crosses trigger
+    add_watchlist_items([{
+        "report_date": "2026-09-23",
+        "stock_name": "HDFCBANK",
+        "symbol": "HDFCBANK.NS",
+        "section": "below_200_dma",
+        "cmp_report": 1640.0,
+        "dma_200": 1650.0,
+        "trigger_price": 1666.50
+    }])
+    simulate_price_update("HDFCBANK.NS", 1675.00) # Crossed trigger!
     simulate_volume_update("HDFCBANK.NS", 80000)
+    cycle_below = run_trading_cycle(force_market_open=True)
+    assert len(cycle_below["buys_triggered"]) == 0, "below_200_dma stock must NOT be bought!"
+    print("[OK] Below 200 DMA stocks are strictly excluded from buying!")
+
+    # 5b. Buy an eligible above_200_dma stock (INFY.NS) to test Stop-Loss (-2%)
+    simulate_price_update("INFY.NS", 1825.00) # > 1818.00 trigger
+    simulate_volume_update("INFY.NS", 100000)
     cycle3 = run_trading_cycle(force_market_open=True)
-    assert len(cycle3["buys_triggered"]) == 1, f"Expected 1 buy for HDFCBANK from sell list, got {len(cycle3['buys_triggered'])}"
-    assert cycle3["buys_triggered"][0]["symbol"] == "HDFCBANK.NS"
+    assert len(cycle3["buys_triggered"]) == 1, f"Expected 1 buy for INFY.NS, got {len(cycle3['buys_triggered'])}"
+    assert cycle3["buys_triggered"][0]["symbol"] == "INFY.NS"
     
-    pos_hdb = get_open_positions()[0]
-    print(f"  * Bought {pos_hdb['symbol']} (from Sell section) @ Rs. {pos_hdb['buy_price']}, SL is Rs. {pos_hdb['stop_loss']}")
-    assert pos_hdb["section"] == "below_200_dma"
+    pos_infy = get_open_positions()[0]
+    print(f"  * Bought {pos_infy['symbol']} (above 200 DMA) @ Rs. {pos_infy['buy_price']}, SL is Rs. {pos_infy['stop_loss']}")
+    assert pos_infy["section"] == "above_200_dma"
     
-    # Simulate drop below Stop Loss (1670 * 0.98 = 1636.60) -> drop to Rs. 1630.00
-    simulate_price_update("HDFCBANK.NS", 1630.00)
+    # Simulate drop below Stop Loss (1825 * 0.98 = 1788.50) -> drop to Rs. 1780.00
+    simulate_price_update("INFY.NS", 1780.00)
     cycle4 = run_trading_cycle(force_market_open=True)
     assert len(cycle4["stop_losses_hit"]) == 1, "Expected stop loss exit"
-    print(f"[OK] Sell list item properly triggered and Stop Loss Exit properly handled! Details: {cycle4['stop_losses_hit'][0]}")
+    print(f"[OK] Stop Loss Exit properly handled! Details: {cycle4['stop_losses_hit'][0]}")
 
     print("\n--- 6. Testing Telegram Alert Formatter ---")
     from backend.notifier import send_telegram_message

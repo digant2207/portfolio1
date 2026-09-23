@@ -161,6 +161,10 @@ def parse_email_html_or_text(html_content: str, text_content: str = "") -> List[
                     if cmp_val > 0 and dma_val > 0:
                         trigger_price = round(dma_val * (1 + (buffer_pct / 100.0)), 2)
                         symbol = clean_symbol(stock_name)
+                        # Skip below 200 DMA items if only_above_200_dma is active
+                        if cfg.get("only_above_200_dma", True) and section == "below_200_dma":
+                            continue
+
                         results.append({
                             "report_date": today_str,
                             "stock_name": stock_name,
@@ -198,6 +202,10 @@ def parse_email_html_or_text(html_content: str, text_content: str = "") -> List[
                         dma_val = float(numbers[1])
                         trigger_price = round(dma_val * (1 + (buffer_pct / 100.0)), 2)
                         symbol = clean_symbol(raw_name)
+                        # Skip below 200 DMA items if only_above_200_dma is active
+                        if cfg.get("only_above_200_dma", True) and current_section == "below_200_dma":
+                            continue
+
                         results.append({
                             "report_date": today_str,
                             "stock_name": raw_name,

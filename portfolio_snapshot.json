@@ -1,5 +1,9 @@
 {
+<<<<<<< HEAD
   "generated_at": "2026-09-23 10:45:42 IST",
+=======
+  "generated_at": "2026-09-23 10:48:22 IST",
+>>>>>>> 46f996f (Restrict buying logic to only above 200 DMA; exclude below 200 DMA)
   "date": "2026-09-23",
   "portfolio": {
     "initial_capital": 100000.0,
@@ -513,6 +517,7 @@
   ],
   "upcoming_trades": [
     {
+<<<<<<< HEAD
       "id": 59,
       "report_date": "2026-09-22",
       "stock_name": "Nahar Capital and Financial Services Ltd",
@@ -601,6 +606,8 @@
       "est_allocation": 10000.0
     },
     {
+=======
+>>>>>>> 46f996f (Restrict buying logic to only above 200 DMA; exclude below 200 DMA)
       "id": 37,
       "report_date": "2026-09-22",
       "stock_name": "DCW Ltd",
@@ -610,6 +617,7 @@
       "dma_200": 48.36,
       "trigger_price": 48.84,
       "status": "PENDING",
+<<<<<<< HEAD
       "current_price": 48.67,
       "last_checked": "2026-09-23 05:15:42",
       "created_at": "2026-09-22 12:30:57",
@@ -909,6 +917,21 @@
       "est_allocation": 10000.0
     },
     {
+=======
+      "current_price": null,
+      "last_checked": null,
+      "created_at": "2026-09-22 12:30:57",
+      "golden_cross": 0,
+      "avg_volume_1m": 1835691.0,
+      "distance_pct": 1.31,
+      "abs_distance_pct": 1.31,
+      "proximity_pct": 98.7,
+      "is_crossed": false,
+      "est_quantity": 207,
+      "est_allocation": 10000.0
+    },
+    {
+>>>>>>> 46f996f (Restrict buying logic to only above 200 DMA; exclude below 200 DMA)
       "id": 41,
       "report_date": "2026-09-22",
       "stock_name": "Veejay Lakshmi Engineering Works Ltd",
@@ -931,6 +954,7 @@
       "est_allocation": 10000.0
     },
     {
+<<<<<<< HEAD
       "id": 27,
       "report_date": "2026-09-22",
       "stock_name": "Jullundur Motor Agency (Delhi) Ltd",
@@ -1049,17 +1073,57 @@
       "cmp_report": 1772.0,
       "dma_200": 1707.08,
       "trigger_price": 1724.15,
+=======
+      "id": 5,
+      "report_date": "2026-09-22",
+      "stock_name": "Tracxn Technologies Ltd",
+      "symbol": "TRACXN.NS",
+      "section": "above_200_dma",
+      "cmp_report": 32.69,
+      "dma_200": 33.18,
+      "trigger_price": 33.51,
+      "status": "PENDING",
+      "current_price": null,
+      "last_checked": null,
+      "created_at": "2026-09-22 11:30:39",
+      "golden_cross": 0,
+      "avg_volume_1m": 237443.0,
+      "distance_pct": 2.45,
+      "abs_distance_pct": 2.45,
+      "proximity_pct": 97.6,
+      "is_crossed": false,
+      "est_quantity": 305,
+      "est_allocation": 10000.0
+    },
+    {
+      "id": 36,
+      "report_date": "2026-09-22",
+      "stock_name": "Sundaram Finance Ltd",
+      "symbol": "SUNDARAM.NS",
+      "section": "above_200_dma",
+      "cmp_report": 4710.0,
+      "dma_200": 4789.0,
+      "trigger_price": 4836.89,
+>>>>>>> 46f996f (Restrict buying logic to only above 200 DMA; exclude below 200 DMA)
       "status": "PENDING",
       "current_price": null,
       "last_checked": null,
       "created_at": "2026-09-22 12:30:57",
       "golden_cross": 0,
       "avg_volume_1m": 0.0,
+<<<<<<< HEAD
       "distance_pct": -2.78,
       "abs_distance_pct": 2.78,
       "proximity_pct": 102.8,
       "is_crossed": true,
       "est_quantity": 5,
+=======
+      "distance_pct": 2.62,
+      "abs_distance_pct": 2.62,
+      "proximity_pct": 97.4,
+      "is_crossed": false,
+      "est_quantity": 2,
+>>>>>>> 46f996f (Restrict buying logic to only above 200 DMA; exclude below 200 DMA)
       "est_allocation": 10000.0
     },
     {
@@ -1072,6 +1136,7 @@
       "dma_200": 4789.12,
       "trigger_price": 4837.01,
       "status": "PENDING",
+<<<<<<< HEAD
       "current_price": 4701.6,
       "last_checked": "2026-09-23 05:15:42",
       "created_at": "2026-09-22 13:00:10",
@@ -1080,11 +1145,22 @@
       "distance_pct": 2.8,
       "abs_distance_pct": 2.8,
       "proximity_pct": 97.2,
+=======
+      "current_price": null,
+      "last_checked": null,
+      "created_at": "2026-09-22 13:00:10",
+      "golden_cross": 0,
+      "avg_volume_1m": 51895.0,
+      "distance_pct": 2.63,
+      "abs_distance_pct": 2.63,
+      "proximity_pct": 97.4,
+>>>>>>> 46f996f (Restrict buying logic to only above 200 DMA; exclude below 200 DMA)
       "is_crossed": false,
       "est_quantity": 2,
       "est_allocation": 10000.0
     },
     {
+<<<<<<< HEAD
       "id": 92,
       "report_date": "2026-09-22",
       "stock_name": "Sheela Foam Ltd",
@@ -1159,12 +1235,23 @@
       "cmp_report": 956.0,
       "dma_200": 919.58,
       "trigger_price": 928.78,
+=======
+      "id": 1,
+      "report_date": "2026-09-22",
+      "stock_name": "Supreme Industries Ltd",
+      "symbol": "SUPREME.NS",
+      "section": "above_200_dma",
+      "cmp_report": 3500.0,
+      "dma_200": 3563.87,
+      "trigger_price": 3599.51,
+>>>>>>> 46f996f (Restrict buying logic to only above 200 DMA; exclude below 200 DMA)
       "status": "PENDING",
       "current_price": null,
       "last_checked": null,
       "created_at": "2026-09-22 11:30:39",
       "golden_cross": 0,
       "avg_volume_1m": 0.0,
+<<<<<<< HEAD
       "distance_pct": -2.93,
       "abs_distance_pct": 2.93,
       "proximity_pct": 102.9,
@@ -1174,6 +1261,17 @@
     },
     {
       "id": 82,
+=======
+      "distance_pct": 2.76,
+      "abs_distance_pct": 2.76,
+      "proximity_pct": 97.2,
+      "is_crossed": false,
+      "est_quantity": 2,
+      "est_allocation": 10000.0
+    },
+    {
+      "id": 10,
+>>>>>>> 46f996f (Restrict buying logic to only above 200 DMA; exclude below 200 DMA)
       "report_date": "2026-09-22",
       "stock_name": "Godrej Industries Ltd",
       "symbol": "GODREJIND.NS",
@@ -1195,6 +1293,7 @@
       "est_allocation": 10000.0
     },
     {
+<<<<<<< HEAD
       "id": 55,
       "report_date": "2026-09-22",
       "stock_name": "Ramco Industries Ltd",
@@ -1328,6 +1427,75 @@
     },
     {
       "id": 89,
+=======
+      "id": 67,
+      "report_date": "2026-09-22",
+      "stock_name": "G M Breweries Ltd",
+      "symbol": "GMBREW.NS",
+      "section": "above_200_dma",
+      "cmp_report": 947.5,
+      "dma_200": 969.26,
+      "trigger_price": 978.95,
+      "status": "PENDING",
+      "current_price": null,
+      "last_checked": null,
+      "created_at": "2026-09-22 13:00:10",
+      "golden_cross": 0,
+      "avg_volume_1m": 30577.0,
+      "distance_pct": 3.21,
+      "abs_distance_pct": 3.21,
+      "proximity_pct": 96.8,
+      "is_crossed": false,
+      "est_quantity": 10,
+      "est_allocation": 10000.0
+    },
+    {
+      "id": 6,
+      "report_date": "2026-09-22",
+      "stock_name": "Kuantum Papers Ltd",
+      "symbol": "KUANTUM.NS",
+      "section": "above_200_dma",
+      "cmp_report": 80.11,
+      "dma_200": 82.04,
+      "trigger_price": 82.86,
+      "status": "PENDING",
+      "current_price": null,
+      "last_checked": null,
+      "created_at": "2026-09-22 11:30:39",
+      "golden_cross": 0,
+      "avg_volume_1m": 0.0,
+      "distance_pct": 3.32,
+      "abs_distance_pct": 3.32,
+      "proximity_pct": 96.7,
+      "is_crossed": false,
+      "est_quantity": 124,
+      "est_allocation": 10000.0
+    },
+    {
+      "id": 68,
+      "report_date": "2026-09-22",
+      "stock_name": "HMA Agro Industries Ltd",
+      "symbol": "HMAAGRO.NS",
+      "section": "above_200_dma",
+      "cmp_report": 23.85,
+      "dma_200": 24.44,
+      "trigger_price": 24.68,
+      "status": "PENDING",
+      "current_price": null,
+      "last_checked": null,
+      "created_at": "2026-09-22 13:00:10",
+      "golden_cross": 0,
+      "avg_volume_1m": 4874636.0,
+      "distance_pct": 3.36,
+      "abs_distance_pct": 3.36,
+      "proximity_pct": 96.6,
+      "is_crossed": false,
+      "est_quantity": 419,
+      "est_allocation": 10000.0
+    },
+    {
+      "id": 2,
+>>>>>>> 46f996f (Restrict buying logic to only above 200 DMA; exclude below 200 DMA)
       "report_date": "2026-09-22",
       "stock_name": "Ramco Industries Ltd",
       "symbol": "RAMCOIND.NS",
@@ -1349,6 +1517,7 @@
       "est_allocation": 10000.0
     },
     {
+<<<<<<< HEAD
       "id": 70,
       "report_date": "2026-09-22",
       "stock_name": "Jindal Drilling and Industries Ltd",
@@ -1481,6 +1650,8 @@
       "est_allocation": 10000.0
     },
     {
+=======
+>>>>>>> 46f996f (Restrict buying logic to only above 200 DMA; exclude below 200 DMA)
       "id": 61,
       "report_date": "2026-09-22",
       "stock_name": "Ajanta Soya Ltd",
@@ -1525,6 +1696,7 @@
       "est_allocation": 10000.0
     },
     {
+<<<<<<< HEAD
       "id": 19,
       "report_date": "2026-09-22",
       "stock_name": "Aditya Birla Sun Life Amc Ltd",
@@ -1591,6 +1763,8 @@
       "est_allocation": 10000.0
     },
     {
+=======
+>>>>>>> 46f996f (Restrict buying logic to only above 200 DMA; exclude below 200 DMA)
       "id": 9,
       "report_date": "2026-09-22",
       "stock_name": "Rajoo Engineers Ltd",
@@ -1635,6 +1809,7 @@
       "est_allocation": 10000.0
     },
     {
+<<<<<<< HEAD
       "id": 81,
       "report_date": "2026-09-22",
       "stock_name": "Federal Bank Ltd",
@@ -1767,6 +1942,8 @@
       "est_allocation": 10000.0
     },
     {
+=======
+>>>>>>> 46f996f (Restrict buying logic to only above 200 DMA; exclude below 200 DMA)
       "id": 11,
       "report_date": "2026-09-22",
       "stock_name": "Jindal Photo Limited",
@@ -1855,6 +2032,7 @@
       "est_allocation": 10000.0
     },
     {
+<<<<<<< HEAD
       "id": 22,
       "report_date": "2026-09-22",
       "stock_name": "Zydus Wellness Ltd",
@@ -1877,6 +2055,8 @@
       "est_allocation": 10000.0
     },
     {
+=======
+>>>>>>> 46f996f (Restrict buying logic to only above 200 DMA; exclude below 200 DMA)
       "id": 8,
       "report_date": "2026-09-22",
       "stock_name": "Patanjali Foods Ltd",
@@ -1897,6 +2077,7 @@
       "is_crossed": false,
       "est_quantity": 24,
       "est_allocation": 10000.0
+<<<<<<< HEAD
     },
     {
       "id": 31,
@@ -1985,6 +2166,8 @@
       "is_crossed": false,
       "est_quantity": 8474,
       "est_allocation": 10000.0
+=======
+>>>>>>> 46f996f (Restrict buying logic to only above 200 DMA; exclude below 200 DMA)
     }
   ]
 }

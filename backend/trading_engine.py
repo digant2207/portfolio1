@@ -181,6 +181,10 @@ def run_trading_cycle(force_market_open: bool = False) -> Dict[str, Any]:
         cursor = conn.cursor()
         
         for item in pending_items:
+            # Condition 0: Only buy stocks in 'above_200_dma' section (below 200 DMA strictly excluded)
+            if cfg.get("only_above_200_dma", True) and item.get("section") != "above_200_dma":
+                continue
+
             sym = item["symbol"]
             cmp = prices.get(sym)
             if not cmp:
