@@ -229,6 +229,42 @@ def test_full_pipeline():
     assert len(rebuys) == 0, "FRESH.NS must NOT be re-bought on the same day it was sold!"
     print("[OK] Sold-Today Exclusion strictly verified: sold stock is never re-bought on the same day!")
 
+    print("\n--- 11. Testing Volume % Filter (>= 50%) & Choosing Nearest-to-Trigger First ---")
+    vol_test_csv = (
+        "Symbol,Stock Name,Current Price (₹),200 DMA (₹),50 DMA (₹),1 Month Avg Volume,Vol. %,Trigger,Stop Loss\n"
+        "LOWVOLPCT.NS,Low Vol Pct Corp,102.00,100.00,101.00,50000,25.0%,,\n"   # Vol % = 25% (< 50%) -> AVOID!
+        "NEAR.NS,Near Trigger Corp,101.20,100.00,100.50,50000,75.0%,,\n"        # Vol % = 75%, Trig = 101.0, Dist = 0.20%
+        "FAR.NS,Far Trigger Corp,104.80,100.00,100.50,50000,80.0%,,\n"          # Vol % = 80%, Trig = 101.0, Dist = 3.76%
+    )
+    vol_parsed = parse_combined_sheet(vol_test_csv)
+    vol_parsed_symbols = {p["symbol"] for p in vol_parsed}
+    print(f"Parsed Volume % test candidates: {vol_parsed_symbols}")
+    assert "LOWVOLPCT.NS" not in vol_parsed_symbols, "LOWVOLPCT.NS (<50% Vol. %) must be avoided/rejected!"
+    assert "NEAR.NS" in vol_parsed_symbols, "NEAR.NS (>= 50% Vol. %) must be accepted!"
+    assert "FAR.NS" in vol_parsed_symbols, "FAR.NS (>= 50% Vol. %) must be accepted!"
+    print("[OK] Volume % Filter strictly verified: stocks with Vol. % < 50% are avoided!")
+
+    add_watchlist_items(vol_parsed)
+    upcoming_list = get_upcoming_trades()
+    upcoming_syms = [u["symbol"] for u in upcoming_list if u["symbol"] in ("NEAR.NS", "FAR.NS")]
+    assert len(upcoming_syms) == 2, f"Expected 2 upcoming stocks, got {len(upcoming_syms)}"
+    assert upcoming_syms[0] == "NEAR.NS" and upcoming_syms[1] == "FAR.NS", f"Expected NEAR.NS first (nearest to trigger), got {upcoming_syms}"
+    print(f"[OK] Upcoming trades ranking strictly verified: {upcoming_syms[0]} (nearer to trigger) appears first!")
+
+    # Verify execution priority: set prices so both NEAR.NS and FAR.NS trigger
+    simulate_price_update("NEAR.NS", 101.20)
+    simulate_price_update("FAR.NS", 104.80)
+    # Temporarily restrict cash so only 1 stock can be bought
+    from backend.database import get_db
+    with get_db() as conn:
+        conn.execute("UPDATE portfolio_state SET cash_balance = 12000.0 WHERE id = 1")
+        conn.commit()
+
+    cycle8 = run_trading_cycle(force_market_open=True)
+    assert len(cycle8["buys_triggered"]) == 1, f"Expected exactly 1 buy due to cash constraint, got {len(cycle8['buys_triggered'])}"
+    assert cycle8["buys_triggered"][0]["symbol"] == "NEAR.NS", f"Expected NEAR.NS to be chosen first, got {cycle8['buys_triggered'][0]['symbol']}"
+    print(f"[OK] Buy execution priority strictly verified: {cycle8['buys_triggered'][0]['symbol']} (nearest to trigger) was chosen first!")
+
     # Clean up test DB
     if TEST_DB_PATH.exists():
         try:

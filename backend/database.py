@@ -42,6 +42,8 @@ def _setup_tables(conn):
             last_checked TIMESTAMP,
             golden_cross INTEGER DEFAULT 0, -- 1 if confirmed Golden Cross from Sheet 2
             avg_volume_1m REAL DEFAULT 0,   -- 1-month avg volume from Google Sheet
+            volume_today REAL DEFAULT 0,    -- Today's traded volume from Sheet
+            vol_pct REAL DEFAULT 0,         -- Today's Volume vs 1-Month Avg Volume %
             sheet_trigger REAL DEFAULT NULL,
             sheet_stop_loss REAL DEFAULT NULL,
             sheet_stop_loss_raw TEXT DEFAULT NULL,
@@ -56,6 +58,14 @@ def _setup_tables(conn):
         pass
     try:
         cursor.execute("ALTER TABLE watchlist ADD COLUMN avg_volume_1m REAL DEFAULT 0")
+    except Exception:
+        pass
+    try:
+        cursor.execute("ALTER TABLE watchlist ADD COLUMN volume_today REAL DEFAULT 0")
+    except Exception:
+        pass
+    try:
+        cursor.execute("ALTER TABLE watchlist ADD COLUMN vol_pct REAL DEFAULT 0")
     except Exception:
         pass
     try:
@@ -267,6 +277,8 @@ def add_watchlist_items(items: List[Dict[str, Any]]) -> int:
             sym = item["symbol"]
             incoming_symbols.add(sym)
             avg_vol = float(item.get("avg_volume_1m") or 0.0)
+            vol_today = float(item.get("volume_today") or 0.0)
+            vol_pct = float(item.get("vol_pct") or 0.0)
             dma_50 = float(item.get("dma_50") or 0.0)
 
             sheet_trig = item.get("sheet_trigger")
@@ -286,12 +298,18 @@ def add_watchlist_items(items: List[Dict[str, Any]]) -> int:
                         sheet_trigger = ?,
                         sheet_stop_loss = ?,
                         sheet_stop_loss_raw = ?,
+                        avg_volume_1m = CASE WHEN ? > 0 THEN ? ELSE avg_volume_1m END,
+                        volume_today = CASE WHEN ? > 0 THEN ? ELSE volume_today END,
+                        vol_pct = CASE WHEN ? > 0 THEN ? ELSE vol_pct END,
                         status = 'TRIGGERED'
                     WHERE symbol = ?
                 """, (
                     item["report_date"], item["cmp_report"], item["dma_200"],
                     dma_50,
                     item["trigger_price"], sheet_trig, sheet_sl, sheet_sl_raw,
+                    avg_vol, avg_vol,
+                    vol_today, vol_today,
+                    vol_pct, vol_pct,
                     sym
                 ))
                 continue
@@ -324,6 +342,8 @@ def add_watchlist_items(items: List[Dict[str, Any]]) -> int:
                         sheet_stop_loss = ?,
                         sheet_stop_loss_raw = ?,
                         avg_volume_1m = CASE WHEN ? > 0 THEN ? ELSE avg_volume_1m END,
+                        volume_today = CASE WHEN ? > 0 THEN ? ELSE volume_today END,
+                        vol_pct = CASE WHEN ? > 0 THEN ? ELSE vol_pct END,
                         golden_cross = 0,
                         status = ?
                     WHERE id = ?
@@ -332,6 +352,8 @@ def add_watchlist_items(items: List[Dict[str, Any]]) -> int:
                     item["cmp_report"], item["dma_200"], dma_50, item["trigger_price"],
                     sheet_trig, sheet_sl, sheet_sl_raw,
                     avg_vol, avg_vol,
+                    vol_today, vol_today,
+                    vol_pct, vol_pct,
                     new_status,
                     row["id"]
                 ))
@@ -344,14 +366,14 @@ def add_watchlist_items(items: List[Dict[str, Any]]) -> int:
                 INSERT INTO watchlist (
                     report_date, stock_name, symbol, section,
                     cmp_report, dma_200, dma_50, trigger_price, status,
-                    golden_cross, avg_volume_1m,
+                    golden_cross, avg_volume_1m, volume_today, vol_pct,
                     sheet_trigger, sheet_stop_loss, sheet_stop_loss_raw
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)
             """, (
                 item["report_date"], item["stock_name"], sym,
                 item["section"], item["cmp_report"], item["dma_200"],
                 dma_50, item["trigger_price"], initial_status,
-                avg_vol,
+                avg_vol, vol_today, vol_pct,
                 sheet_trig, sheet_sl, sheet_sl_raw
             ))
             added += 1
@@ -407,6 +429,7 @@ def get_pending_watchlist() -> List[Dict[str, Any]]:
     cfg = load_config()
     min_price = cfg.get("min_stock_price", 20.0)
     min_volume = cfg.get("min_1m_avg_volume", 10000.0)
+    min_vol_pct = cfg.get("min_volume_pct", 50.0)
     only_above = cfg.get("only_above_200_dma", True)
     max_buffer_pct = cfg.get("max_breakout_buffer_pct", 5.0)
     require_50_dma = cfg.get("require_above_50_dma", True)
@@ -433,6 +456,11 @@ def get_pending_watchlist() -> List[Dict[str, Any]]:
                 continue
             seen.add(sym)
 
+            # Strict Filter: Avoid stocks where Volume % < 50%
+            vol_pct = float(it.get("vol_pct") or 0.0)
+            if min_vol_pct > 0 and vol_pct > 0 and vol_pct < min_vol_pct:
+                continue
+
             # Option 1 & Option 4 filter (unless custom sheet trigger)
             if not it.get("sheet_trigger"):
                 cmp = it.get("current_price") or it.get("cmp_report", 0.0)
@@ -443,6 +471,9 @@ def get_pending_watchlist() -> List[Dict[str, Any]]:
                 if max_buffer_pct > 0 and dma_200 > 0 and cmp > round(dma_200 * (1 + (max_buffer_pct / 100.0)), 2):
                     continue
             unique_rows.append(it)
+
+        # Prioritize candidates nearest to trigger price first
+        unique_rows.sort(key=lambda it: abs((it.get("current_price") or it.get("cmp_report") or 0.0) - (it.get("trigger_price") or 0.0)) / (it.get("trigger_price") or 1.0))
         return unique_rows
 
 def get_nearest_breakout_candidates(limit: int = 10, min_price: float = None, min_volume: float = None) -> List[Dict[str, Any]]:
@@ -454,10 +485,9 @@ def get_nearest_breakout_candidates(limit: int = 10, min_price: float = None, mi
     Excludes stocks sold today.
     """
     cfg = load_config()
-    if min_price is None:
-        min_price = cfg.get("min_stock_price", 20.0)
-    if min_volume is None:
-        min_volume = cfg.get("min_1m_avg_volume", 10000.0)
+    min_price = cfg.get("min_stock_price", 20.0) if min_price is None else min_price
+    min_volume = cfg.get("min_1m_avg_volume", 10000.0) if min_volume is None else min_volume
+    min_vol_pct = cfg.get("min_volume_pct", 50.0)
     only_above = cfg.get("only_above_200_dma", True)
     max_buffer_pct = cfg.get("max_breakout_buffer_pct", 5.0)
     require_50_dma = cfg.get("require_above_50_dma", True)
@@ -485,11 +515,16 @@ def get_nearest_breakout_candidates(limit: int = 10, min_price: float = None, mi
             item["current_price"] = cmp
             trig = item.get("trigger_price", 0.0)
             avg_vol = float(item.get("avg_volume_1m") or 0.0)
+            vol_pct = float(item.get("vol_pct") or 0.0)
             dma_200 = float(item.get("dma_200") or 0.0)
             dma_50 = float(item.get("dma_50") or 0.0)
             
             # 1. Filter penny stocks & invalid trigger prices
             if cmp <= min_price or trig <= 0:
+                continue
+
+            # Strict Filter: Avoid stocks where Volume % < 50%
+            if min_vol_pct > 0 and vol_pct > 0 and vol_pct < min_vol_pct:
                 continue
                 
             # 2. Filter low volume stocks (< 10,000 shares 1-month avg volume)
@@ -606,6 +641,7 @@ def get_upcoming_trades(limit: int = 100) -> List[Dict[str, Any]]:
     """
     cfg = load_config()
     trade_alloc = cfg.get("trade_allocation", 10000.0)
+    min_vol_pct = cfg.get("min_volume_pct", 50.0)
     only_above = cfg.get("only_above_200_dma", True)
     max_buffer_pct = cfg.get("max_breakout_buffer_pct", 5.0)
     require_50_dma = cfg.get("require_above_50_dma", True)
@@ -629,6 +665,11 @@ def get_upcoming_trades(limit: int = 100) -> List[Dict[str, Any]]:
             if sym in seen_symbols or sym in sold_today:
                 continue
             seen_symbols.add(sym)
+
+            # Strict Filter: Avoid stocks where Volume % < 50%
+            vol_pct = float(it.get("vol_pct") or 0.0)
+            if min_vol_pct > 0 and vol_pct > 0 and vol_pct < min_vol_pct:
+                continue
 
             cmp = it.get("current_price") or it.get("cmp_report") or 0.0
             trig = it.get("trigger_price") or 0.0

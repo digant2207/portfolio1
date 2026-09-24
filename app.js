@@ -507,7 +507,10 @@ function renderUpcomingTrades() {
                             </div>
                             <span style="font-size: 11px; font-family: var(--font-mono);">${proximityPct}% (${distPct > 0 ? distPct + '% away' : 'Crossed'})</span>
                         </td>
-                        <td>${formatVolume(item.avg_volume_1m)}</td>
+                        <td>
+                            ${formatVolume(item.avg_volume_1m)}
+                            ${item.vol_pct ? `<br><span class="badge ${item.vol_pct >= 50 ? 'badge-success' : 'badge-warning'}" style="font-size:10px; padding:1px 5px;" title="Today Volume vs 1-Month Avg">Vol: ${item.vol_pct}%</span>` : ''}
+                        </td>
                         <td>${statusBadge}</td>
                         <td>${actionBtn}</td>
                     </tr>
@@ -581,6 +584,10 @@ function renderUpcomingTrades() {
                             <div class="mobile-stat-col">
                                 <span class="mobile-stat-label">200 DMA</span>
                                 <span class="mobile-stat-val">₹${item.dma_200.toFixed(2)}</span>
+                            </div>
+                            <div class="mobile-stat-col">
+                                <span class="mobile-stat-label">Vol %</span>
+                                <span class="mobile-stat-val" style="color: ${item.vol_pct >= 50 ? 'var(--success)' : 'var(--text-muted)'}; font-weight:600;">${item.vol_pct ? item.vol_pct + '%' : '-'}</span>
                             </div>
                         </div>
                         <div>

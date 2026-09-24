@@ -144,6 +144,7 @@ def parse_combined_sheet(csv_text: str) -> List[Dict[str, Any]]:
     require_50_dma = cfg.get("require_above_50_dma", True)
     min_price = cfg.get("min_stock_price", 20.0)
     min_volume = cfg.get("min_1m_avg_volume", 10000.0)
+    min_vol_pct = cfg.get("min_volume_pct", 50.0)
     only_above_200 = cfg.get("only_above_200_dma", True)
     today_str = datetime.now().strftime("%Y-%m-%d")
     results = []
@@ -171,7 +172,9 @@ def parse_combined_sheet(csv_text: str) -> List[Dict[str, Any]]:
             dma_50 = parse_number(row.get("50 DMA (₹)") or row.get("50 DMA"))
             volume = parse_number(row.get("Volume"))
             avg_vol_1m = parse_number(row.get("1 Month Avg Volume"))
-            vol_pct = parse_number(row.get("Vol. %"))
+            vol_pct = parse_number(row.get("Vol. %") or row.get("Vol %") or row.get("Volume %"))
+            if vol_pct <= 0 and volume > 0 and avg_vol_1m > 0:
+                vol_pct = round((volume / avg_vol_1m) * 100.0, 2)
             dma_signal = str(row.get("DMA Signal", "")).strip()
 
             # Custom Trigger and Stop Loss from Google Sheet
@@ -213,6 +216,11 @@ def parse_combined_sheet(csv_text: str) -> List[Dict[str, Any]]:
 
             # Strict Filter 2: Ignore illiquid stocks (1-Month Avg Daily Volume < 10,000)
             if avg_vol_1m > 0 and avg_vol_1m < min_volume:
+                continue
+
+            # Strict Filter 3: Volume Participation — Avoid stocks where Today's Vol. % < 50%
+            has_vol_pct_col = any(k in row for k in ["Vol. %", "Vol %", "Volume %"])
+            if min_vol_pct > 0 and (has_vol_pct_col or vol_pct > 0) and vol_pct < min_vol_pct:
                 continue
 
             # Golden cross trigger removed as of now: apply only 200 DMA + 1% and custom sheet triggers
@@ -268,12 +276,13 @@ def fetch_and_process_sheets() -> Tuple[bool, str, List[Dict[str, Any]]]:
         log_event("INFO", "Google Sheet fetched successfully, but no stocks matched current screening filters.")
         return True, "No candidate stocks matched current screening filters.", []
 
-    # 3. Sort candidates: Custom Triggers first, then 200 DMA + 1% triggers (by symbol)
+    # 3. Sort candidates: Custom Triggers first, then nearest to trigger price (proximity)
     custom_trig_count = sum(1 for c in candidates if c.get("sheet_trigger"))
     dma_trig_count = len(candidates) - custom_trig_count
     candidates.sort(key=lambda x: (
         not bool(x.get("sheet_trigger")),   # Explicit custom triggers highest priority
         0 if x["section"] == "above_200_dma" else 1,
+        abs(x["cmp_report"] - x["trigger_price"]) / (x["trigger_price"] or 1.0), # Nearest to trigger first
         x["symbol"]
     ))
 

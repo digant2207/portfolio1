@@ -220,6 +220,7 @@ def run_trading_cycle(force_market_open: bool = False) -> Dict[str, Any]:
     target_pct = cfg.get("target_pct", 5.0)
     min_stock_price = cfg.get("min_stock_price", 20.0)
     min_1m_avg_vol = cfg.get("min_1m_avg_volume", 10000)
+    min_vol_pct = cfg.get("min_volume_pct", 50.0)
     max_buffer_pct = cfg.get("max_breakout_buffer_pct", 5.0)
     require_50_dma = cfg.get("require_above_50_dma", True)
 
@@ -227,6 +228,16 @@ def run_trading_cycle(force_market_open: bool = False) -> Dict[str, Any]:
     open_positions = get_open_positions()
     open_symbols = {p["symbol"] for p in open_positions}
     sold_today_symbols = get_sold_today_symbols()
+
+    # Rule: If more than one candidate in upcoming trades, prioritize the one nearest to trigger
+    def _trigger_distance(it):
+        c = prices.get(it["symbol"]) or it.get("current_price") or it.get("cmp_report") or 0.0
+        t = it.get("trigger_price") or 0.0
+        if t > 0 and c > 0:
+            return abs(c - t) / t
+        return 999999.0
+
+    pending_items.sort(key=_trigger_distance)
 
     with get_db() as conn:
         cursor = conn.cursor()
@@ -281,6 +292,12 @@ def run_trading_cycle(force_market_open: bool = False) -> Dict[str, Any]:
                     avg_vol = fetch_monthly_average_volume(sym)
                 if avg_vol < min_1m_avg_vol:
                     log_event("WARNING", f"Trigger reached for {sym} @ ₹{cmp}, but ignored: 1-month avg volume ({int(avg_vol):,}) is below required minimum of {int(min_1m_avg_vol):,} shares.", conn=conn)
+                    continue
+
+                # Condition 3b: Filter out low volume % stocks (Today's Volume vs 1-Month Avg Volume < 50%)
+                vol_pct = float(item.get("vol_pct") or 0.0)
+                if min_vol_pct > 0 and vol_pct > 0 and vol_pct < min_vol_pct:
+                    log_event("WARNING", f"Trigger reached for {sym} @ ₹{cmp}, but avoided: Volume % ({vol_pct}%) is below minimum required {min_vol_pct}%.", conn=conn)
                     continue
                 
                 # Check capital & slot limit

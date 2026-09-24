@@ -32,6 +32,7 @@ DEFAULT_CONFIG = {
     "require_above_50_dma": True,    # Trend alignment: CMP must be >= 50 DMA (Option 4)
     "min_stock_price": 20.0,    # Ignore stocks with CMP <= 20
     "min_1m_avg_volume": 10000, # Ignore stocks with 1-month avg volume < 10,000
+    "min_volume_pct": 50.0,     # Avoid stocks where Today Volume vs 1M Avg Volume < 50%
     "only_above_200_dma": True, # Strictly buy only stocks above 200 DMA; exclude below 200 DMA
     
     # Google Sheets Data Source (Unified Sheet)

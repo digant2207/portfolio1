@@ -71,6 +71,12 @@ Before adding any stock to the trading watchlist, it must pass **5 safety filter
 - *Exception:* If you explicitly enter a price in the Google Sheet **`Trigger`** column, your custom price overrides this filter with top priority.
 - *Controlled by:* `"max_breakout_buffer_pct": 5.0` in `config.json`.
 
+### Filter 6: Volume % Participation (Avoid < 30%) — *Minimum 50% Vol. %* 📊
+- **Rule:** Today's traded volume as a percentage of the 30-day average volume must be at least **50%**:
+  $$\text{Vol. \%} = \frac{\text{Today's Volume}}{\text{1-Month Average Volume}} \times 100 \ge 50\%$$
+- **Why:** Avoids low-volume fakeouts and dead stocks. If volume participation is below 50%, the stock is **avoided/ignored** because genuine breakouts require active market volume.
+- *Controlled by:* `"min_volume_pct": 50.0` in `config.json`.
+
 ### 🚫 Golden Cross Trigger (REMOVED / DISABLED)
 > [!IMPORTANT]
 > **Golden Cross is NOT used as an entry trigger or priority condition.**
@@ -109,19 +115,23 @@ During Indian stock market hours (**09:15 AM to 03:30 PM IST**, Monday to Friday
 
 1. **Live Price Check:**
    - Every cycle (default: every 15 minutes in GitHub Actions, or every 2 minutes in local server), the engine fetches live quotes (`CMP`, `Day High`, `Day Low`, `Open`) from NSE/BSE via Yahoo Finance.
-2. **Trigger Evaluation:**
-   - If $\text{Live CMP} \ge \text{Trigger Price}$, the buy rule is satisfied.
-3. **🚫 Sold Today Exclusion (No Same-Day Re-Entry):**
+2. **Proximity-First Prioritization (Choose Nearest to Trigger First):**
+   - If more than one candidate is in the upcoming trades list or triggers during the cycle, the engine **chooses first whichever candidate is closest/nearest to its trigger price**:
+     $$\text{Distance to Trigger} = \frac{|\text{Live CMP} - \text{Trigger Price}|}{\text{Trigger Price}}$$
+   - Candidates are ranked so the closest breakout is evaluated and executed with highest priority.
+3. **Trigger Evaluation & Volume % Check:**
+   - If $\text{Live CMP} \ge \text{Trigger Price}$ and $\text{Vol. \%} \ge 50\%$, the buy rule is satisfied.
+4. **🚫 Sold Today Exclusion (No Same-Day Re-Entry):**
    - If a stock was **sold today** (whether via Target Hit, Stop-Loss Hit, or Manual Exit), the system **strictly excludes it from re-buying or being considered for the rest of the day**.
    - It will neither appear in upcoming trades nor be bought again until a new trading day.
-4. **Portfolio & Capital Checks:**
+5. **Portfolio & Capital Checks:**
    - **Capital per trade:** Exactly **₹10,000** (`trade_allocation`).
    - **Maximum open positions:** At most **10 active stocks** at the same time (`max_active_trades`).
    - **Available Cash:** Must have at least ₹10,000 cash in the portfolio.
    - **Quantity bought:**
      $$\text{Quantity} = \lfloor \frac{\text{₹10,000}}{\text{Live CMP}} \rfloor$$
      *(Example: If CMP is ₹450, Quantity = $\lfloor 10000 / 450 \rfloor = 22$ shares. Invested = ₹9,900).*
-5. **Order Execution:**
+6. **Order Execution:**
    - Position is opened in the database.
    - Deducts cash from portfolio balance.
    - Sends instant Telegram alert and records the trade.
