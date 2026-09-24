@@ -320,12 +320,10 @@ def fetch_and_process_sheets() -> Tuple[bool, str, List[Dict[str, Any]]]:
 
                 q = live_quotes.get(pos_sym, {})
                 cmp_val = q.get("price") or pos.get("current_price") or pos.get("buy_price")
-                day_low = q.get("low") or cmp_val
                 is_exit_signal = str(raw_sl).strip().upper() in ["EXIT", "SL", "SELL", "CLOSE", "HIT", "STOP LOSS", "STOPLOSS"]
 
-                if is_exit_signal or (sl_num and sl_num > 0 and (cmp_val <= sl_num or day_low <= sl_num)):
-                    exit_price = sl_num if (sl_num and day_low <= sl_num and cmp_val > sl_num) else cmp_val
-                    execute_stop_loss_exit(pos, exit_price, exit_reason="STOP_LOSS_HIT")
+                if is_exit_signal or (sl_num and sl_num > 0 and cmp_val <= sl_num):
+                    execute_stop_loss_exit(pos, cmp_val, exit_reason="STOP_LOSS_HIT")
                     log_event("TRADE", f"🛑 Position {pos_sym} closed due to Google Sheet Stop-Loss indicator: {raw_sl or sl_num}")
                 elif sl_num and sl_num > 0 and sl_num != pos.get("stop_loss"):
                     update_position_stop_loss(pos["id"], sl_num)

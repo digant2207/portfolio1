@@ -140,18 +140,22 @@ During Indian stock market hours (**09:15 AM to 03:30 PM IST**, Monday to Friday
 
 ## 5️⃣ Step 5: Exit & Risk Management Rules (Automated Sell)
 
-Because market checks run on intervals (e.g. every 15 minutes), a stock can hit its target or touch its stop-loss intraday and retrace before the next scheduled check. To ensure **zero missed exits**, the engine checks both **Live CMP** and **Today's High & Low**:
+Exits are evaluated strictly on **Live CMP (Current Market Price)** during market checks:
 
 | Exit Type | Condition | Formula Checked | Action & Telegram Alert |
 | :--- | :--- | :--- | :--- |
-| 🎯 **Target (Profit)** | Price gains **+5%** | $\text{Live CMP} \ge \text{Target}$ **OR** $\text{Day's High} \ge \text{Target}$ | **SELL ALL SHARES** at Target price & lock in profit! |
-| 🛑 **Stop-Loss (Protection)** | Price drops **-2%** | $\text{Live CMP} \le \text{Stop Loss}$ **OR** $\text{Day's Low} \le \text{Stop Loss}$ | **SELL ALL SHARES** at Stop Loss & cut loss! |
-| ⚠️ **Sheet Stop-Loss (Column `Stop Loss`)** | Stop-Loss indicated in Sheet | $\text{Live CMP} \le \text{Sheet SL}$ **OR** $\text{Day's Low} \le \text{Sheet SL}$ OR text says `EXIT`/`SL` | **IMMEDIATE EXIT** & Instant Telegram Alert! |
+| 🎯 **Target (Profit)** | Price gains **+5%** | $\text{Live CMP} \ge \text{Target}$ | **SELL ALL SHARES** at CMP & lock in profit! |
+| 🛑 **Stop-Loss (Protection)** | Price drops **-2%** | $\text{Live CMP} \le \text{Stop Loss}$ | **SELL ALL SHARES** at CMP & cut loss! |
+| ⚠️ **Sheet Stop-Loss (Column `Stop Loss`)** | Stop-Loss indicated in Sheet | $\text{Live CMP} \le \text{Sheet SL}$ OR text says `EXIT`/`SL` | **IMMEDIATE EXIT** & Instant Telegram Alert! |
+
+> [!NOTE]
+> **Why Day's High and Day's Low are NOT used for exits:**
+> Day's Low/High from market quotes represents the extreme prices of the **entire day** (including hours before the stock was purchased). If a stock opened with a brief morning wick down before breaking out and being bought at noon, checking Day's Low would falsely trigger Stop Loss immediately. Evaluating exits strictly on **Live CMP** ensures trades are only closed when the current market price actually crosses the exit threshold while you hold the position.
 
 ### How the `Stop Loss` Column in the Google Sheet Works:
 If you enter a price or signal in the **`Stop Loss`** column of the Google Sheet for a stock you are currently holding:
 1. **Immediate Exit & Telegram Message:**
-   - If $\text{Live CMP} \le \text{Sheet Stop Loss}$ OR $\text{Day's Low} \le \text{Sheet Stop Loss}$ (or if you write `EXIT`, `SL`, or `SELL` in the column):
+   - If $\text{Live CMP} \le \text{Sheet Stop Loss}$ (or if you write `EXIT`, `SL`, or `SELL` in the column):
      - The system **immediately sells and closes the position** (`STOP_LOSS_HIT`).
      - Proceeds return to your cash balance.
      - You receive an **instant Stop-Loss alert on Telegram** with all trade metrics (Stock, Sell Price, Buy Price, Qty, Realized P&L).

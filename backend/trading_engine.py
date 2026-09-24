@@ -141,31 +141,26 @@ def run_trading_cycle(force_market_open: bool = False) -> Dict[str, Any]:
                 target = pos["target_price"]
                 pos_id = pos["id"]
 
-                # Evaluate Target and Stop-Loss conditions using CMP, Day High, and Day Low
-                # (Accounts for 15-minute polling intervals where price touched target/SL intraday)
-                target_reached = (cmp >= target or day_high >= target)
-                sl_reached = (cmp <= sl or day_low <= sl)
+                # Evaluate Target and Stop-Loss conditions strictly based on Live CMP
+                # (Day Low / High are excluded because Day Low reflects prices from before the position was opened)
+                target_reached = (cmp >= target)
+                sl_reached = (cmp <= sl)
 
-                # In the rare event both are triggered on the same day:
+                # In the rare event both are triggered on the same check:
                 if target_reached and sl_reached:
-                    if day_open >= target:
-                        target_reached, sl_reached = True, False
-                    elif day_open <= sl:
-                        target_reached, sl_reached = False, True
-                    elif cmp >= buy_price:
+                    if cmp >= buy_price:
                         target_reached, sl_reached = True, False
                     else:
                         target_reached, sl_reached = False, True
                 
                 # Check Stop-Loss
                 if sl_reached:
-                    exit_price = round(day_open, 2) if day_open <= sl else round(min(sl, cmp), 2)
-                    trade_record = execute_stop_loss_exit(pos, exit_price, exit_reason="STOP_LOSS_HIT", conn=conn)
+                    trade_record = execute_stop_loss_exit(pos, cmp, exit_reason="STOP_LOSS_HIT", conn=conn)
                     cycle_summary["stop_losses_hit"].append(trade_record)
                     
                 # Check Target
                 elif target_reached:
-                    exit_price = round(day_open, 2) if day_open >= target else round(max(target, cmp), 2)
+                    exit_price = cmp
                     realized_pnl = round((exit_price - buy_price) * qty, 2)
                     proceeds = round(exit_price * qty, 2)
                     
@@ -194,7 +189,7 @@ def run_trading_cycle(force_market_open: bool = False) -> Dict[str, Any]:
                     # Mark watchlist item as TRIGGERED so it does not remain PENDING
                     cursor.execute("UPDATE watchlist SET status = 'TRIGGERED' WHERE symbol = ?", (sym,))
                     
-                    msg = f"🎯 TARGET HIT: Sold {qty} {sym} @ ₹{exit_price} (Buy: ₹{buy_price}, High: ₹{day_high}, P&L: +₹{realized_pnl})"
+                    msg = f"🎯 TARGET HIT: Sold {qty} {sym} @ ₹{exit_price} (Buy: ₹{buy_price}, P&L: +₹{realized_pnl})"
                     log_event("TRADE", msg, conn=conn)
                     
                     # Instant Telegram Notification
