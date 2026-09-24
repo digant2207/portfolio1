@@ -43,8 +43,13 @@ def execute_stop_loss_exit(pos: Dict[str, Any], cmp: float, exit_reason: str = "
             UPDATE positions SET 
                 status = 'CLOSED', close_price = ?, close_timestamp = CURRENT_TIMESTAMP,
                 realized_pnl = ?, exit_reason = ?
-            WHERE id = ?
+            WHERE id = ? AND status = 'OPEN'
         """, (cmp, realized_pnl, exit_reason, pos_id))
+        
+        if cursor.rowcount == 0:
+            return {
+                "symbol": sym, "price": cmp, "buy_price": buy_price, "pnl": realized_pnl, "already_closed": True
+            }
         
         cursor.execute("""
             UPDATE portfolio_state SET 
@@ -168,8 +173,11 @@ def run_trading_cycle(force_market_open: bool = False) -> Dict[str, Any]:
                         UPDATE positions SET 
                             status = 'CLOSED', close_price = ?, close_timestamp = CURRENT_TIMESTAMP,
                             realized_pnl = ?, exit_reason = 'TARGET_HIT'
-                        WHERE id = ?
+                        WHERE id = ? AND status = 'OPEN'
                     """, (exit_price, realized_pnl, pos_id))
+                    
+                    if cursor.rowcount == 0:
+                        continue
                     
                     cursor.execute("""
                         UPDATE portfolio_state SET 
