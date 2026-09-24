@@ -7,7 +7,7 @@ Applies:
 """
 import math
 from datetime import datetime
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from .config import load_config
 from .database import (
     get_db, log_event, get_pending_watchlist, get_open_positions,
@@ -18,7 +18,7 @@ from .market_data import (
 )
 from .notifier import notify_trade_buy, notify_trade_sell
 
-def execute_stop_loss_exit(pos: Dict[str, Any], cmp: float, exit_reason: str = "STOP_LOSS_HIT") -> Dict[str, Any]:
+def execute_stop_loss_exit(pos: Dict[str, Any], cmp: float, exit_reason: str = "STOP_LOSS_HIT", conn: Optional[Any] = None) -> Dict[str, Any]:
     """
     Closes an open position upon hitting Stop Loss or receiving an explicit exit signal from the sheet.
     Updates position status, portfolio cash balance & realized P&L, records trade,
@@ -32,7 +32,12 @@ def execute_stop_loss_exit(pos: Dict[str, Any], cmp: float, exit_reason: str = "
     realized_pnl = round((cmp - buy_price) * qty, 2)
     proceeds = round(cmp * qty, 2)
 
-    with get_db() as conn:
+    own_conn = False
+    if conn is None:
+        conn = get_db()
+        own_conn = True
+
+    try:
         cursor = conn.cursor()
         cursor.execute("""
             UPDATE positions SET 
@@ -62,6 +67,9 @@ def execute_stop_loss_exit(pos: Dict[str, Any], cmp: float, exit_reason: str = "
         msg = f"🛑 STOP-LOSS HIT: Sold {qty} {sym} @ ₹{cmp} (Buy: ₹{buy_price}, P&L: ₹{realized_pnl})"
         log_event("TRADE", msg, conn=conn)
         conn.commit()
+    finally:
+        if own_conn:
+            conn.close()
 
     try:
         notify_trade_sell({
@@ -69,7 +77,7 @@ def execute_stop_loss_exit(pos: Dict[str, Any], cmp: float, exit_reason: str = "
             "price": cmp, "buy_price": buy_price, "quantity": qty, "pnl": realized_pnl, "proceeds": proceeds
         })
     except Exception as tg_err:
-        log_event("WARNING", f"Telegram alert error on SL exit: {tg_err}")
+        log_event("WARNING", f"Telegram alert error on SL exit: {tg_err}", conn=conn if not own_conn else None)
 
     return {
         "symbol": sym, "price": cmp, "buy_price": buy_price, "pnl": realized_pnl
@@ -116,96 +124,100 @@ def run_trading_cycle(force_market_open: bool = False) -> Dict[str, Any]:
         
         # 1. Evaluate Open Positions for Exit (Stop-Loss or Target) using High, Low, and CMP
         for pos in open_positions:
-            sym = pos["symbol"]
-            q = quotes.get(sym)
-            if not q:
-                continue
+            try:
+                sym = pos["symbol"]
+                q = quotes.get(sym)
+                if not q:
+                    continue
 
-            cmp = q["price"]
-            day_high = q.get("high") or cmp
-            day_low = q.get("low") or cmp
-            day_open = q.get("open") or cmp
-                
-            qty = pos["quantity"]
-            buy_price = pos["buy_price"]
-            sl = pos["stop_loss"]
-            target = pos["target_price"]
-            pos_id = pos["id"]
-
-            # Evaluate Target and Stop-Loss conditions using CMP, Day High, and Day Low
-            # (Accounts for 15-minute polling intervals where price touched target/SL intraday)
-            target_reached = (cmp >= target or day_high >= target)
-            sl_reached = (cmp <= sl or day_low <= sl)
-
-            # In the rare event both are triggered on the same day:
-            if target_reached and sl_reached:
-                if day_open >= target:
-                    target_reached, sl_reached = True, False
-                elif day_open <= sl:
-                    target_reached, sl_reached = False, True
-                elif cmp >= buy_price:
-                    target_reached, sl_reached = True, False
-                else:
-                    target_reached, sl_reached = False, True
-            
-            # Check Stop-Loss
-            if sl_reached:
-                exit_price = round(day_open, 2) if day_open <= sl else round(min(sl, cmp), 2)
-                trade_record = execute_stop_loss_exit(pos, exit_price, exit_reason="STOP_LOSS_HIT")
-                cycle_summary["stop_losses_hit"].append(trade_record)
-                
-            # Check Target
-            elif target_reached:
-                exit_price = round(day_open, 2) if day_open >= target else round(max(target, cmp), 2)
-                realized_pnl = round((exit_price - buy_price) * qty, 2)
-                proceeds = round(exit_price * qty, 2)
-                
-                cursor.execute("""
-                    UPDATE positions SET 
-                        status = 'CLOSED', close_price = ?, close_timestamp = CURRENT_TIMESTAMP,
-                        realized_pnl = ?, exit_reason = 'TARGET_HIT'
-                    WHERE id = ?
-                """, (exit_price, realized_pnl, pos_id))
-                
-                cursor.execute("""
-                    UPDATE portfolio_state SET 
-                        cash_balance = cash_balance + ?,
-                        realized_pnl = realized_pnl + ?,
-                        updated_at = CURRENT_TIMESTAMP
-                    WHERE id = 1
-                """, (proceeds, realized_pnl))
-                
-                cursor.execute("""
-                    INSERT INTO trades (
-                        position_id, symbol, stock_name, trade_type, price,
-                        quantity, total_value, pnl, exit_reason
-                    ) VALUES (?, ?, ?, 'SELL', ?, ?, ?, ?, 'TARGET_HIT')
-                """, (pos_id, sym, pos["stock_name"], exit_price, qty, proceeds, realized_pnl))
-
-                # Mark watchlist item as TRIGGERED so it does not remain PENDING
-                cursor.execute("UPDATE watchlist SET status = 'TRIGGERED' WHERE symbol = ?", (sym,))
-                
-                msg = f"🎯 TARGET HIT: Sold {qty} {sym} @ ₹{exit_price} (Buy: ₹{buy_price}, High: ₹{day_high}, P&L: +₹{realized_pnl})"
-                log_event("TRADE", msg, conn=conn)
-                
-                # Instant Telegram Notification
-                try:
-                    notify_trade_sell({
-                        "symbol": sym, "stock_name": pos["stock_name"], "exit_reason": "TARGET_HIT",
-                        "price": exit_price, "buy_price": buy_price, "quantity": qty, "pnl": realized_pnl, "proceeds": proceeds
-                    })
-                except Exception as tg_err:
-                    log_event("WARNING", f"Telegram alert error on Target exit: {tg_err}")
+                cmp = q["price"]
+                day_high = q.get("high") or cmp
+                day_low = q.get("low") or cmp
+                day_open = q.get("open") or cmp
                     
-                cycle_summary["targets_hit"].append({
-                    "symbol": sym, "price": exit_price, "buy_price": buy_price, "pnl": realized_pnl
-                })
-            else:
-                # Update current price & unrealized P&L in DB
-                unrealized = round((cmp - buy_price) * qty, 2)
-                cursor.execute("""
-                    UPDATE positions SET current_price = ?, unrealized_pnl = ? WHERE id = ?
-                """, (cmp, unrealized, pos_id))
+                qty = pos["quantity"]
+                buy_price = pos["buy_price"]
+                sl = pos["stop_loss"]
+                target = pos["target_price"]
+                pos_id = pos["id"]
+
+                # Evaluate Target and Stop-Loss conditions using CMP, Day High, and Day Low
+                # (Accounts for 15-minute polling intervals where price touched target/SL intraday)
+                target_reached = (cmp >= target or day_high >= target)
+                sl_reached = (cmp <= sl or day_low <= sl)
+
+                # In the rare event both are triggered on the same day:
+                if target_reached and sl_reached:
+                    if day_open >= target:
+                        target_reached, sl_reached = True, False
+                    elif day_open <= sl:
+                        target_reached, sl_reached = False, True
+                    elif cmp >= buy_price:
+                        target_reached, sl_reached = True, False
+                    else:
+                        target_reached, sl_reached = False, True
+                
+                # Check Stop-Loss
+                if sl_reached:
+                    exit_price = round(day_open, 2) if day_open <= sl else round(min(sl, cmp), 2)
+                    trade_record = execute_stop_loss_exit(pos, exit_price, exit_reason="STOP_LOSS_HIT", conn=conn)
+                    cycle_summary["stop_losses_hit"].append(trade_record)
+                    
+                # Check Target
+                elif target_reached:
+                    exit_price = round(day_open, 2) if day_open >= target else round(max(target, cmp), 2)
+                    realized_pnl = round((exit_price - buy_price) * qty, 2)
+                    proceeds = round(exit_price * qty, 2)
+                    
+                    cursor.execute("""
+                        UPDATE positions SET 
+                            status = 'CLOSED', close_price = ?, close_timestamp = CURRENT_TIMESTAMP,
+                            realized_pnl = ?, exit_reason = 'TARGET_HIT'
+                        WHERE id = ?
+                    """, (exit_price, realized_pnl, pos_id))
+                    
+                    cursor.execute("""
+                        UPDATE portfolio_state SET 
+                            cash_balance = cash_balance + ?,
+                            realized_pnl = realized_pnl + ?,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE id = 1
+                    """, (proceeds, realized_pnl))
+                    
+                    cursor.execute("""
+                        INSERT INTO trades (
+                            position_id, symbol, stock_name, trade_type, price,
+                            quantity, total_value, pnl, exit_reason
+                        ) VALUES (?, ?, ?, 'SELL', ?, ?, ?, ?, 'TARGET_HIT')
+                    """, (pos_id, sym, pos["stock_name"], exit_price, qty, proceeds, realized_pnl))
+
+                    # Mark watchlist item as TRIGGERED so it does not remain PENDING
+                    cursor.execute("UPDATE watchlist SET status = 'TRIGGERED' WHERE symbol = ?", (sym,))
+                    
+                    msg = f"🎯 TARGET HIT: Sold {qty} {sym} @ ₹{exit_price} (Buy: ₹{buy_price}, High: ₹{day_high}, P&L: +₹{realized_pnl})"
+                    log_event("TRADE", msg, conn=conn)
+                    
+                    # Instant Telegram Notification
+                    try:
+                        notify_trade_sell({
+                            "symbol": sym, "stock_name": pos["stock_name"], "exit_reason": "TARGET_HIT",
+                            "price": exit_price, "buy_price": buy_price, "quantity": qty, "pnl": realized_pnl, "proceeds": proceeds
+                        })
+                    except Exception as tg_err:
+                        log_event("WARNING", f"Telegram alert error on Target exit: {tg_err}")
+                        
+                    cycle_summary["targets_hit"].append({
+                        "symbol": sym, "price": exit_price, "buy_price": buy_price, "pnl": realized_pnl
+                    })
+                else:
+                    # Update current price & unrealized P&L in DB
+                    unrealized = round((cmp - buy_price) * qty, 2)
+                    cursor.execute("""
+                        UPDATE positions SET current_price = ?, unrealized_pnl = ? WHERE id = ?
+                    """, (cmp, unrealized, pos_id))
+            except Exception as pos_err:
+                log_event("ERROR", f"Error evaluating position {pos.get('symbol')}: {pos_err}", conn=conn)
+                cycle_summary["errors"].append(str(pos_err))
 
         conn.commit()
 
