@@ -140,6 +140,8 @@ def parse_combined_sheet(csv_text: str) -> List[Dict[str, Any]]:
     """
     cfg = load_config()
     buffer_pct = cfg.get("trigger_buffer_pct", 1.0)
+    max_buffer_pct = cfg.get("max_breakout_buffer_pct", 5.0)
+    require_50_dma = cfg.get("require_above_50_dma", True)
     min_price = cfg.get("min_stock_price", 20.0)
     min_volume = cfg.get("min_1m_avg_volume", 10000.0)
     only_above_200 = cfg.get("only_above_200_dma", True)
@@ -192,6 +194,14 @@ def parse_combined_sheet(csv_text: str) -> List[Dict[str, Any]]:
                 section = "above_200_dma" if is_above_200 else "below_200_dma"
 
                 if only_above_200 and section == "below_200_dma":
+                    continue
+
+                # Option 4: Trend Alignment — CMP must be >= 50 DMA
+                if require_50_dma and dma_50 > 0 and cmp_val < dma_50:
+                    continue
+
+                # Option 1: Fresh Breakout Zone — CMP must NOT be overextended above 200 DMA (default max 5%)
+                if max_buffer_pct > 0 and cmp_val > round(dma_200 * (1 + (max_buffer_pct / 100.0)), 2):
                     continue
 
                 # Breakout trigger price: 200 DMA + 1% buffer
@@ -267,8 +277,13 @@ def fetch_and_process_sheets() -> Tuple[bool, str, List[Dict[str, Any]]]:
         x["symbol"]
     ))
 
-    # 4. Add to watchlist DB
+    # 4. Add to watchlist DB & expire non-qualifying PENDING items
+    from .database import expire_unlisted_watchlist_items
     added = add_watchlist_items(candidates)
+    active_symbols = [c["symbol"] for c in candidates]
+    expired_count = expire_unlisted_watchlist_items(active_symbols)
+    if expired_count > 0:
+        log_event("INFO", f"Watchlist cleanup: Expired {expired_count} stocks no longer meeting screening rules.")
     log_event("INFO", f"Google Sheets: Parsed {len(candidates)} candidate stocks ({custom_trig_count} custom triggers, {dma_trig_count} 200 DMA + 1% triggers). {added} new added to watchlist.")
 
     # 5. Check if any currently open position has an indicated Stop Loss in the sheet

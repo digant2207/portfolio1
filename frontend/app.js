@@ -1095,6 +1095,8 @@ function initModals() {
                 setVal("input-total-capital", cfg.total_capital || 100000);
                 setVal("input-trade-alloc", cfg.trade_allocation || 10000);
                 setVal("input-trigger-buf", cfg.trigger_buffer_pct || 1.0);
+                setVal("input-max-breakout-buf", cfg.max_breakout_buffer_pct !== undefined ? cfg.max_breakout_buffer_pct : 5.0);
+                setVal("input-require-50-dma", cfg.require_above_50_dma !== false ? "true" : "false");
                 setVal("input-stop-loss", cfg.stop_loss_pct || 2.0);
                 setVal("input-target", cfg.target_pct || 5.0);
                 setVal("input-min-price", cfg.min_stock_price !== undefined ? cfg.min_stock_price : 20.0);
@@ -1127,6 +1129,8 @@ function initModals() {
             total_capital: getNum("input-total-capital", 100000),
             trade_allocation: getNum("input-trade-alloc", 10000),
             trigger_buffer_pct: getNum("input-trigger-buf", 1.0),
+            max_breakout_buffer_pct: getNum("input-max-breakout-buf", 5.0),
+            require_above_50_dma: document.getElementById("input-require-50-dma")?.value === "true",
             stop_loss_pct: getNum("input-stop-loss", 2.0),
             target_pct: getNum("input-target", 5.0),
             min_stock_price: getNum("input-min-price", 20.0),

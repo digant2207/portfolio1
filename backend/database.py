@@ -35,12 +35,16 @@ def _setup_tables(conn):
             section TEXT NOT NULL,          -- 'above_200_dma' or 'below_200_dma'
             cmp_report REAL NOT NULL,
             dma_200 REAL NOT NULL,
+            dma_50 REAL DEFAULT 0,
             trigger_price REAL NOT NULL,    -- 200 DMA + 1%
             status TEXT DEFAULT 'PENDING',  -- 'PENDING', 'TRIGGERED', 'EXPIRED', 'SKIPPED'
             current_price REAL,
             last_checked TIMESTAMP,
             golden_cross INTEGER DEFAULT 0, -- 1 if confirmed Golden Cross from Sheet 2
             avg_volume_1m REAL DEFAULT 0,   -- 1-month avg volume from Google Sheet
+            sheet_trigger REAL DEFAULT NULL,
+            sheet_stop_loss REAL DEFAULT NULL,
+            sheet_stop_loss_raw TEXT DEFAULT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
@@ -64,6 +68,10 @@ def _setup_tables(conn):
         pass
     try:
         cursor.execute("ALTER TABLE watchlist ADD COLUMN sheet_stop_loss_raw TEXT DEFAULT NULL")
+    except Exception:
+        pass
+    try:
+        cursor.execute("ALTER TABLE watchlist ADD COLUMN dma_50 REAL DEFAULT 0")
     except Exception:
         pass
     
@@ -252,11 +260,14 @@ def reset_portfolio():
 
 def add_watchlist_items(items: List[Dict[str, Any]]) -> int:
     added = 0
+    incoming_symbols = set()
     with get_db() as conn:
         cursor = conn.cursor()
         for item in items:
             sym = item["symbol"]
+            incoming_symbols.add(sym)
             avg_vol = float(item.get("avg_volume_1m") or 0.0)
+            dma_50 = float(item.get("dma_50") or 0.0)
 
             sheet_trig = item.get("sheet_trigger")
             sheet_sl = item.get("sheet_stop_loss")
@@ -270,6 +281,7 @@ def add_watchlist_items(items: List[Dict[str, Any]]) -> int:
                         report_date = ?,
                         cmp_report = ?,
                         dma_200 = ?,
+                        dma_50 = ?,
                         trigger_price = ?,
                         sheet_trigger = ?,
                         sheet_stop_loss = ?,
@@ -278,6 +290,7 @@ def add_watchlist_items(items: List[Dict[str, Any]]) -> int:
                     WHERE symbol = ?
                 """, (
                     item["report_date"], item["cmp_report"], item["dma_200"],
+                    dma_50,
                     item["trigger_price"], sheet_trig, sheet_sl, sheet_sl_raw,
                     sym
                 ))
@@ -291,6 +304,7 @@ def add_watchlist_items(items: List[Dict[str, Any]]) -> int:
             """, (sym,))
             row = cursor.fetchone()
             if row:
+                new_status = 'REJECTED' if row["status"] == 'REJECTED' else 'PENDING'
                 cursor.execute("""
                     UPDATE watchlist SET
                         report_date = ?,
@@ -298,18 +312,21 @@ def add_watchlist_items(items: List[Dict[str, Any]]) -> int:
                         section = ?,
                         cmp_report = ?,
                         dma_200 = ?,
+                        dma_50 = ?,
                         trigger_price = ?,
                         sheet_trigger = ?,
                         sheet_stop_loss = ?,
                         sheet_stop_loss_raw = ?,
                         avg_volume_1m = CASE WHEN ? > 0 THEN ? ELSE avg_volume_1m END,
-                        golden_cross = 0
+                        golden_cross = 0,
+                        status = ?
                     WHERE id = ?
                 """, (
                     item["report_date"], item["stock_name"], item["section"],
-                    item["cmp_report"], item["dma_200"], item["trigger_price"],
+                    item["cmp_report"], item["dma_200"], dma_50, item["trigger_price"],
                     sheet_trig, sheet_sl, sheet_sl_raw,
                     avg_vol, avg_vol,
+                    new_status,
                     row["id"]
                 ))
                 continue
@@ -318,20 +335,20 @@ def add_watchlist_items(items: List[Dict[str, Any]]) -> int:
             cursor.execute("""
                 INSERT INTO watchlist (
                     report_date, stock_name, symbol, section,
-                    cmp_report, dma_200, trigger_price, status,
+                    cmp_report, dma_200, dma_50, trigger_price, status,
                     golden_cross, avg_volume_1m,
                     sheet_trigger, sheet_stop_loss, sheet_stop_loss_raw
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, 'PENDING', 0, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', 0, ?, ?, ?, ?)
             """, (
                 item["report_date"], item["stock_name"], sym,
                 item["section"], item["cmp_report"], item["dma_200"],
-                item["trigger_price"],
+                dma_50, item["trigger_price"],
                 avg_vol,
                 sheet_trig, sheet_sl, sheet_sl_raw
             ))
             added += 1
 
-        # Post-processing cleanup: ensure at most 1 PENDING/REJECTED entry per symbol
+        # Cleanup duplicates: ensure at most 1 entry per symbol
         cursor.execute("""
             DELETE FROM watchlist 
             WHERE id NOT IN (
@@ -344,6 +361,21 @@ def add_watchlist_items(items: List[Dict[str, Any]]) -> int:
         conn.commit()
     return added
 
+def expire_unlisted_watchlist_items(active_symbols: List[str]) -> int:
+    """Marks any PENDING watchlist items not present in active_symbols as EXPIRED."""
+    if not active_symbols:
+        return 0
+    with get_db() as conn:
+        placeholders = ",".join("?" for _ in active_symbols)
+        cursor = conn.execute(f"""
+            UPDATE watchlist 
+            SET status = 'EXPIRED' 
+            WHERE status = 'PENDING' 
+              AND symbol NOT IN ({placeholders})
+        """, list(active_symbols))
+        conn.commit()
+        return cursor.rowcount
+
 def update_position_stop_loss(position_id: int, stop_loss: float):
     with get_db() as conn:
         conn.execute("UPDATE positions SET stop_loss = ? WHERE id = ?", (round(stop_loss, 2), position_id))
@@ -354,6 +386,8 @@ def get_pending_watchlist() -> List[Dict[str, Any]]:
     min_price = cfg.get("min_stock_price", 20.0)
     min_volume = cfg.get("min_1m_avg_volume", 10000.0)
     only_above = cfg.get("only_above_200_dma", True)
+    max_buffer_pct = cfg.get("max_breakout_buffer_pct", 5.0)
+    require_50_dma = cfg.get("require_above_50_dma", True)
     with get_db() as conn:
         section_clause = "AND section = 'above_200_dma'" if only_above else ""
         query = f"""
@@ -372,6 +406,15 @@ def get_pending_watchlist() -> List[Dict[str, Any]]:
             it = dict(r)
             if it["symbol"] not in seen:
                 seen.add(it["symbol"])
+                # Option 1 & Option 4 filter (unless custom sheet trigger)
+                if not it.get("sheet_trigger"):
+                    cmp = it.get("current_price") or it.get("cmp_report", 0.0)
+                    dma_200 = float(it.get("dma_200") or 0.0)
+                    dma_50 = float(it.get("dma_50") or 0.0)
+                    if require_50_dma and dma_50 > 0 and cmp < dma_50:
+                        continue
+                    if max_buffer_pct > 0 and dma_200 > 0 and cmp > round(dma_200 * (1 + (max_buffer_pct / 100.0)), 2):
+                        continue
                 unique_rows.append(it)
         return unique_rows
 
@@ -380,6 +423,7 @@ def get_nearest_breakout_candidates(limit: int = 10, min_price: float = None, mi
     Returns candidate stocks sorted by proximity to their 200 DMA + 1% breakout trigger.
     Strictly filters out penny stocks (CMP <= min_price) and illiquid stocks (1-month avg volume < min_volume).
     Filters only 'above_200_dma' when only_above_200_dma is active.
+    Applies Option 1 (Fresh breakout zone <= 200 DMA + 5%) and Option 4 (CMP >= 50 DMA).
     """
     cfg = load_config()
     if min_price is None:
@@ -387,6 +431,8 @@ def get_nearest_breakout_candidates(limit: int = 10, min_price: float = None, mi
     if min_volume is None:
         min_volume = cfg.get("min_1m_avg_volume", 10000.0)
     only_above = cfg.get("only_above_200_dma", True)
+    max_buffer_pct = cfg.get("max_breakout_buffer_pct", 5.0)
+    require_50_dma = cfg.get("require_above_50_dma", True)
 
     with get_db() as conn:
         section_clause = "AND section = 'above_200_dma'" if only_above else ""
@@ -410,6 +456,8 @@ def get_nearest_breakout_candidates(limit: int = 10, min_price: float = None, mi
             item["current_price"] = cmp
             trig = item.get("trigger_price", 0.0)
             avg_vol = float(item.get("avg_volume_1m") or 0.0)
+            dma_200 = float(item.get("dma_200") or 0.0)
+            dma_50 = float(item.get("dma_50") or 0.0)
             
             # 1. Filter penny stocks & invalid trigger prices
             if cmp <= min_price or trig <= 0:
@@ -435,6 +483,13 @@ def get_nearest_breakout_candidates(limit: int = 10, min_price: float = None, mi
                     item["avg_volume_1m"] = avg_vol
                 else:
                     # In live mode without volume data, skip unverified stock
+                    continue
+
+            # 3. Unless custom trigger from sheet, apply Option 1 & Option 4
+            if not item.get("sheet_trigger"):
+                if require_50_dma and dma_50 > 0 and cmp < dma_50:
+                    continue
+                if max_buffer_pct > 0 and dma_200 > 0 and cmp > round(dma_200 * (1 + (max_buffer_pct / 100.0)), 2):
                     continue
                 
             diff_pct = round(((trig - cmp) / trig) * 100, 2)
@@ -518,10 +573,13 @@ def get_upcoming_trades(limit: int = 100) -> List[Dict[str, Any]]:
     Includes both PENDING and REJECTED items so the user can see and toggle their status.
     Calculates proximity percentage and distance to trigger price.
     Strictly deduplicates by symbol and excludes stocks that are already open positions.
+    Applies Option 1 (Fresh breakout zone <= 200 DMA + 5%) and Option 4 (CMP >= 50 DMA).
     """
     cfg = load_config()
     trade_alloc = cfg.get("trade_allocation", 10000.0)
     only_above = cfg.get("only_above_200_dma", True)
+    max_buffer_pct = cfg.get("max_breakout_buffer_pct", 5.0)
+    require_50_dma = cfg.get("require_above_50_dma", True)
     with get_db() as conn:
         section_clause = "AND section = 'above_200_dma'" if only_above else ""
         query = f"""
@@ -543,6 +601,15 @@ def get_upcoming_trades(limit: int = 100) -> List[Dict[str, Any]]:
 
             cmp = it.get("current_price") or it.get("cmp_report") or 0.0
             trig = it.get("trigger_price") or 0.0
+            dma_200 = float(it.get("dma_200") or 0.0)
+            dma_50 = float(it.get("dma_50") or 0.0)
+
+            # Option 4 & Option 1 filters (unless custom sheet trigger)
+            if not it.get("sheet_trigger"):
+                if require_50_dma and dma_50 > 0 and cmp < dma_50:
+                    continue
+                if max_buffer_pct > 0 and dma_200 > 0 and cmp > round(dma_200 * (1 + (max_buffer_pct / 100.0)), 2):
+                    continue
             
             diff_pct = round(((trig - cmp) / trig) * 100, 2) if trig > 0 else 0.0
             abs_dist = round(abs(trig - cmp) / trig * 100, 2) if trig > 0 else 0.0

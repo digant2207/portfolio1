@@ -28,6 +28,8 @@ DEFAULT_CONFIG = {
     "stop_loss_pct": 2.0,       # 2% stop loss
     "target_pct": 5.0,          # 5% minimum target
     "trigger_buffer_pct": 1.0,  # 200 DMA + 1%
+    "max_breakout_buffer_pct": 5.0, # Fresh breakout zone: max 5% above 200 DMA (Option 1)
+    "require_above_50_dma": True,    # Trend alignment: CMP must be >= 50 DMA (Option 4)
     "min_stock_price": 20.0,    # Ignore stocks with CMP <= 20
     "min_1m_avg_volume": 10000, # Ignore stocks with 1-month avg volume < 10,000
     "only_above_200_dma": True, # Strictly buy only stocks above 200 DMA; exclude below 200 DMA

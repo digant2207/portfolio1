@@ -10,7 +10,7 @@ Use this guide whenever you want to understand how trades happen, modify rules, 
 
 ```mermaid
 flowchart TD
-    A["1. Google Sheet (757 Stocks)"] --> B["2. Filtering Rules\n(Price > ₹20, Vol >= 10k, Above 200 DMA)"]
+    A["1. Google Sheet (757 Stocks)"] --> B["2. 5 Screening Filters\n(Price > ₹20, Vol >= 10k,\nAbove 200 DMA, Above 50 DMA,\nFresh Breakout <= 200 DMA + 5%)"]
     B --> C["3. Watchlist & Triggers\n(Custom Sheet Trigger OR 200 DMA + 1%)"]
     C --> D["4. Live Market Engine (9:15 - 15:30 IST)\nChecks live price every cycle"]
     D -->|"CMP >= Trigger"| E["BUY (₹10,000 per stock, Max 10 positions)"]
@@ -43,9 +43,9 @@ The system reads your single unified Google Sheet:
 
 ## 2️⃣ Step 2: Filtering & Screening Candidates
 
-Before adding any stock to the trading watchlist, it must pass **3 safety filters**:
+Before adding any stock to the trading watchlist, it must pass **5 safety filters**:
 
-### Filter 1: Trend Filter (Above 200 DMA)
+### Filter 1: Long-Term Trend Filter (Above 200 DMA)
 - **Rule:** The stock price must be at or above its 200-day moving average:
   $$\text{CMP} \ge \text{200 DMA}$$
 - **Why:** Stocks trading above the 200 DMA are in a long-term uptrend. Stocks below 200 DMA are in a downtrend and are ignored.
@@ -57,6 +57,19 @@ Before adding any stock to the trading watchlist, it must pass **3 safety filter
 ### Filter 3: Liquidity Filter (1-Month Average Volume)
 - **Rule:** The stock's 30-day average daily volume must be at least **10,000 shares** (`min_1m_avg_volume`).
 - **Why:** Ensures we only trade liquid stocks that can be easily bought and sold.
+
+### Filter 4: Short-Term Trend Alignment (Above 50 DMA) — *Option 4* 📈
+- **Rule:** The stock price must also be at or above its 50-day moving average:
+  $$\text{CMP} \ge \text{50 DMA}$$
+- **Why:** Guarantees dual-trend confirmation. Even if a stock is technically above its 200 DMA, if it has fallen below its 50 DMA, it is experiencing short-term weakness or a deep pullback. Buying is restricted to stocks showing active short-term and long-term strength.
+- *Controlled by:* `"require_above_50_dma": true` in `config.json`.
+
+### Filter 5: Fresh Breakout Zone Cap (Max 5% Above 200 DMA) — *Option 1* 🎯
+- **Rule:** The stock price must be within the fresh breakout accumulation window:
+  $$\text{CMP} \le \text{200 DMA} \times 1.05 \quad (\text{Max 5.0\% above 200 DMA})$$
+- **Why:** In a universe of 757 stocks, dozens of stocks can be 20% to 50% above 200 DMA (overextended). Without this cap, all overextended stocks trigger simultaneously on day 1. This filter ensures we only enter **fresh, low-risk breakouts** (between +1% and +5% of 200 DMA) right near support.
+- *Exception:* If you explicitly enter a price in the Google Sheet **`Trigger`** column, your custom price overrides this filter with top priority.
+- *Controlled by:* `"max_breakout_buffer_pct": 5.0` in `config.json`.
 
 ### 🚫 Golden Cross Trigger (REMOVED / DISABLED)
 > [!IMPORTANT]
@@ -150,6 +163,8 @@ Open [`config.json`](file:///c:/Users/DELL/.gemini/antigravity-ide/scratch/portf
 | `"stop_loss_pct"` | `2.0` | Stop loss percentage (2.0 = 2%). |
 | `"target_pct"` | `5.0` | Profit target percentage (5.0 = 5%). |
 | `"trigger_buffer_pct"` | `1.0` | Breakout buffer above 200 DMA (1.0 = 1%). |
+| `"max_breakout_buffer_pct"` | `5.0` | Fresh breakout zone cap: max 5% above 200 DMA (*Option 1*). |
+| `"require_above_50_dma"` | `true` | Dual trend alignment: CMP must be >= 50 DMA (*Option 4*). |
 | `"min_stock_price"` | `20.0` | Penny stock price filter (₹20.0). |
 | `"min_1m_avg_volume"` | `10000` | Minimum 1-month average daily volume (10,000 shares). |
 | `"google_sheet_id"` | `1EKa...` | The Google Sheet ID to fetch data from. |

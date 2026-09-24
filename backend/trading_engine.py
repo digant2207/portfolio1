@@ -188,6 +188,8 @@ def run_trading_cycle(force_market_open: bool = False) -> Dict[str, Any]:
     target_pct = cfg.get("target_pct", 5.0)
     min_stock_price = cfg.get("min_stock_price", 20.0)
     min_1m_avg_vol = cfg.get("min_1m_avg_volume", 10000)
+    max_buffer_pct = cfg.get("max_breakout_buffer_pct", 5.0)
+    require_50_dma = cfg.get("require_above_50_dma", True)
 
     # 2. Evaluate Pending Watchlist for Buy Triggers (200 DMA + 1%)
     open_positions = get_open_positions()
@@ -213,8 +215,23 @@ def run_trading_cycle(force_market_open: bool = False) -> Dict[str, Any]:
             
             trigger_price = item["trigger_price"]
             
-            # Condition 1: CMP >= 200 DMA + 1% Breakout Trigger
+            # Condition 1: CMP >= 200 DMA + 1% Breakout Trigger (or Custom Sheet Trigger)
             if cmp >= trigger_price:
+                # If standard breakout (not custom sheet trigger), apply Option 4 & Option 1 filters
+                if not item.get("sheet_trigger"):
+                    dma_200 = float(item.get("dma_200") or 0.0)
+                    dma_50 = float(item.get("dma_50") or 0.0)
+
+                    # Option 4: Short-term trend alignment (CMP >= 50 DMA)
+                    if require_50_dma and dma_50 > 0 and cmp < dma_50:
+                        log_event("WARNING", f"Trigger reached for {sym} @ ₹{cmp}, but skipped: CMP is below 50 DMA (₹{dma_50}).", conn=conn)
+                        continue
+
+                    # Option 1: Fresh breakout zone (CMP <= 200 DMA + max_buffer_pct)
+                    if max_buffer_pct > 0 and dma_200 > 0 and cmp > round(dma_200 * (1 + (max_buffer_pct / 100.0)), 2):
+                        log_event("WARNING", f"Trigger reached for {sym} @ ₹{cmp}, but skipped: CMP (₹{cmp}) is overextended >{max_buffer_pct}% above 200 DMA (₹{dma_200}).", conn=conn)
+                        continue
+
                 # Condition 2: Filter out penny stocks / stocks with CMP <= min_stock_price (e.g. <= 20)
                 if cmp <= min_stock_price:
                     log_event("WARNING", f"Trigger reached for {sym} @ ₹{cmp}, but ignored: CMP (₹{cmp}) is not greater than minimum required price ₹{min_stock_price}.", conn=conn)

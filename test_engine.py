@@ -180,6 +180,33 @@ def test_full_pipeline():
     print(f"[OK] Candidate List Email Subject: '{w_subject}'")
     print(f"[OK] Candidate List HTML Body generated ({len(w_html)} bytes)")
 
+    print("\n--- 9. Testing Option 1 (Max 5% Breakout Cap) and Option 4 (CMP >= 50 DMA) Filters ---")
+    from backend.sheet_reader import parse_combined_sheet
+    test_csv = (
+        "Symbol,Stock Name,Current Price (₹),200 DMA (₹),50 DMA (₹),1 Month Avg Volume,Trigger,Stop Loss\n"
+        "OVEREXT.NS,Overextended Corp,112.00,100.00,98.00,50000,,\n"        # +12% over 200 DMA (>5%) -> Reject (Option 1)
+        "BELOW50.NS,Below 50 DMA Corp,102.00,100.00,106.00,50000,,\n"        # Below 50 DMA (102 < 106) -> Reject (Option 4)
+        "FRESH.NS,Fresh Breakout Corp,103.00,100.00,101.00,50000,,\n"        # <=105 & >=101 -> ACCEPT!
+        "CUSTOM.NS,Custom Trigger Corp,120.00,100.00,95.00,50000,122.00,\n"   # Explicit trigger overrides -> ACCEPT!
+    )
+    parsed = parse_combined_sheet(test_csv)
+    parsed_symbols = {p["symbol"] for p in parsed}
+    print(f"Parsed candidates count: {len(parsed)}: {parsed_symbols}")
+    assert "FRESH.NS" in parsed_symbols, "FRESH.NS should pass both Option 1 and Option 4"
+    assert "CUSTOM.NS" in parsed_symbols, "CUSTOM.NS with explicit Trigger should bypass 5% cap"
+    assert "OVEREXT.NS" not in parsed_symbols, "OVEREXT.NS (>5% above 200 DMA) must be filtered out by Option 1"
+    assert "BELOW50.NS" not in parsed_symbols, "BELOW50.NS (< 50 DMA) must be filtered out by Option 4"
+    print("[OK] parse_combined_sheet successfully applies Option 1 and Option 4 screening!")
+
+    # Verify live engine behavior with Option 1 & 4
+    add_watchlist_items(parsed)
+    simulate_price_update("FRESH.NS", 103.50)  # > 101.00 trigger, <= 105.00 (within 5% cap), >= 101 50 DMA
+    simulate_volume_update("FRESH.NS", 50000)
+    cycle5 = run_trading_cycle(force_market_open=True)
+    fresh_buys = [b for b in cycle5["buys_triggered"] if b["symbol"] == "FRESH.NS"]
+    assert len(fresh_buys) == 1, "FRESH.NS should trigger buy"
+    print(f"[OK] Live engine successfully bought fresh breakout stock {fresh_buys[0]['symbol']} @ Rs. {fresh_buys[0]['price']}!")
+
     # Clean up test DB
     if TEST_DB_PATH.exists():
         try:
