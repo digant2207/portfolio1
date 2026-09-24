@@ -11,9 +11,11 @@ from typing import Dict, Any, List
 from .config import load_config
 from .database import (
     get_db, log_event, get_pending_watchlist, get_open_positions,
-    get_portfolio_summary, update_watchlist_price
+    get_portfolio_summary, update_watchlist_price, get_sold_today_symbols
 )
-from .market_data import is_market_open, fetch_current_prices, fetch_monthly_average_volume
+from .market_data import (
+    is_market_open, fetch_current_prices, fetch_market_quotes, fetch_monthly_average_volume
+)
 from .notifier import notify_trade_buy, notify_trade_sell
 
 def execute_stop_loss_exit(pos: Dict[str, Any], cmp: float, exit_reason: str = "STOP_LOSS_HIT") -> Dict[str, Any]:
@@ -53,6 +55,9 @@ def execute_stop_loss_exit(pos: Dict[str, Any], cmp: float, exit_reason: str = "
                 quantity, total_value, pnl, exit_reason
             ) VALUES (?, ?, ?, 'SELL', ?, ?, ?, ?, ?)
         """, (pos_id, sym, stock_name, cmp, qty, proceeds, realized_pnl, exit_reason))
+
+        # Mark watchlist item as TRIGGERED so it does not remain PENDING
+        cursor.execute("UPDATE watchlist SET status = 'TRIGGERED' WHERE symbol = ?", (sym,))
         
         msg = f"🛑 STOP-LOSS HIT: Sold {qty} {sym} @ ₹{cmp} (Buy: ₹{buy_price}, P&L: ₹{realized_pnl})"
         log_event("TRADE", msg, conn=conn)
@@ -103,40 +108,64 @@ def run_trading_cycle(force_market_open: bool = False) -> Dict[str, Any]:
     if not symbols_to_fetch:
         return cycle_summary
         
-    prices = fetch_current_prices(symbols_to_fetch)
+    quotes = fetch_market_quotes(symbols_to_fetch)
+    prices = {s: q["price"] for s, q in quotes.items()}
     
     with get_db() as conn:
         cursor = conn.cursor()
         
-        # 1. Evaluate Open Positions for Exit (Stop-Loss or Target)
+        # 1. Evaluate Open Positions for Exit (Stop-Loss or Target) using High, Low, and CMP
         for pos in open_positions:
             sym = pos["symbol"]
-            cmp = prices.get(sym)
-            if not cmp:
+            q = quotes.get(sym)
+            if not q:
                 continue
+
+            cmp = q["price"]
+            day_high = q.get("high") or cmp
+            day_low = q.get("low") or cmp
+            day_open = q.get("open") or cmp
                 
             qty = pos["quantity"]
             buy_price = pos["buy_price"]
             sl = pos["stop_loss"]
             target = pos["target_price"]
             pos_id = pos["id"]
+
+            # Evaluate Target and Stop-Loss conditions using CMP, Day High, and Day Low
+            # (Accounts for 15-minute polling intervals where price touched target/SL intraday)
+            target_reached = (cmp >= target or day_high >= target)
+            sl_reached = (cmp <= sl or day_low <= sl)
+
+            # In the rare event both are triggered on the same day:
+            if target_reached and sl_reached:
+                if day_open >= target:
+                    target_reached, sl_reached = True, False
+                elif day_open <= sl:
+                    target_reached, sl_reached = False, True
+                elif cmp >= buy_price:
+                    target_reached, sl_reached = True, False
+                else:
+                    target_reached, sl_reached = False, True
             
             # Check Stop-Loss
-            if cmp <= sl:
-                trade_record = execute_stop_loss_exit(pos, cmp, exit_reason="STOP_LOSS_HIT")
+            if sl_reached:
+                exit_price = round(day_open, 2) if day_open <= sl else round(min(sl, cmp), 2)
+                trade_record = execute_stop_loss_exit(pos, exit_price, exit_reason="STOP_LOSS_HIT")
                 cycle_summary["stop_losses_hit"].append(trade_record)
                 
             # Check Target
-            elif cmp >= target:
-                realized_pnl = round((cmp - buy_price) * qty, 2)
-                proceeds = round(cmp * qty, 2)
+            elif target_reached:
+                exit_price = round(day_open, 2) if day_open >= target else round(max(target, cmp), 2)
+                realized_pnl = round((exit_price - buy_price) * qty, 2)
+                proceeds = round(exit_price * qty, 2)
                 
                 cursor.execute("""
                     UPDATE positions SET 
                         status = 'CLOSED', close_price = ?, close_timestamp = CURRENT_TIMESTAMP,
                         realized_pnl = ?, exit_reason = 'TARGET_HIT'
                     WHERE id = ?
-                """, (cmp, realized_pnl, pos_id))
+                """, (exit_price, realized_pnl, pos_id))
                 
                 cursor.execute("""
                     UPDATE portfolio_state SET 
@@ -151,22 +180,25 @@ def run_trading_cycle(force_market_open: bool = False) -> Dict[str, Any]:
                         position_id, symbol, stock_name, trade_type, price,
                         quantity, total_value, pnl, exit_reason
                     ) VALUES (?, ?, ?, 'SELL', ?, ?, ?, ?, 'TARGET_HIT')
-                """, (pos_id, sym, pos["stock_name"], cmp, qty, proceeds, realized_pnl))
+                """, (pos_id, sym, pos["stock_name"], exit_price, qty, proceeds, realized_pnl))
+
+                # Mark watchlist item as TRIGGERED so it does not remain PENDING
+                cursor.execute("UPDATE watchlist SET status = 'TRIGGERED' WHERE symbol = ?", (sym,))
                 
-                msg = f"🎯 TARGET HIT: Sold {qty} {sym} @ ₹{cmp} (Buy: ₹{buy_price}, P&L: +₹{realized_pnl})"
+                msg = f"🎯 TARGET HIT: Sold {qty} {sym} @ ₹{exit_price} (Buy: ₹{buy_price}, High: ₹{day_high}, P&L: +₹{realized_pnl})"
                 log_event("TRADE", msg, conn=conn)
                 
                 # Instant Telegram Notification
                 try:
                     notify_trade_sell({
                         "symbol": sym, "stock_name": pos["stock_name"], "exit_reason": "TARGET_HIT",
-                        "price": cmp, "buy_price": buy_price, "quantity": qty, "pnl": realized_pnl, "proceeds": proceeds
+                        "price": exit_price, "buy_price": buy_price, "quantity": qty, "pnl": realized_pnl, "proceeds": proceeds
                     })
                 except Exception as tg_err:
                     log_event("WARNING", f"Telegram alert error on Target exit: {tg_err}")
                     
                 cycle_summary["targets_hit"].append({
-                    "symbol": sym, "price": cmp, "buy_price": buy_price, "pnl": realized_pnl
+                    "symbol": sym, "price": exit_price, "buy_price": buy_price, "pnl": realized_pnl
                 })
             else:
                 # Update current price & unrealized P&L in DB
@@ -194,6 +226,7 @@ def run_trading_cycle(force_market_open: bool = False) -> Dict[str, Any]:
     # 2. Evaluate Pending Watchlist for Buy Triggers (200 DMA + 1%)
     open_positions = get_open_positions()
     open_symbols = {p["symbol"] for p in open_positions}
+    sold_today_symbols = get_sold_today_symbols()
 
     with get_db() as conn:
         cursor = conn.cursor()
@@ -205,6 +238,10 @@ def run_trading_cycle(force_market_open: bool = False) -> Dict[str, Any]:
 
             sym = item["symbol"]
             if sym in open_symbols:
+                continue
+
+            # CRITICAL RULE: If stock was sold today, do NOT consider or buy again today!
+            if sym in sold_today_symbols:
                 continue
 
             cmp = prices.get(sym)
@@ -363,7 +400,8 @@ def manual_close_position(position_id: int) -> bool:
                 quantity, total_value, pnl, exit_reason
             ) VALUES (?, ?, ?, 'SELL', ?, ?, ?, ?, 'MANUAL')
         """, (position_id, sym, pos["stock_name"], cmp, qty, proceeds, realized_pnl))
-        
+
+        conn.execute("UPDATE watchlist SET status = 'TRIGGERED' WHERE symbol = ?", (sym,))
         conn.commit()
         log_event("TRADE", f"✋ MANUAL EXIT: Closed {sym} @ ₹{cmp} (P&L: ₹{realized_pnl})")
         

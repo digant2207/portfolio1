@@ -207,6 +207,28 @@ def test_full_pipeline():
     assert len(fresh_buys) == 1, "FRESH.NS should trigger buy"
     print(f"[OK] Live engine successfully bought fresh breakout stock {fresh_buys[0]['symbol']} @ Rs. {fresh_buys[0]['price']}!")
 
+    print("\n--- 10. Testing Day High/Low Exits & Sold-Today Exclusion Rule ---")
+    from backend.database import get_sold_today_symbols, get_upcoming_trades, get_pending_watchlist
+    # 10a. Simulate price retracing to 104.00, but Day High reached 110.00 (exceeds target ~108.68)
+    simulate_price_update("FRESH.NS", target_price=104.00, high=110.00, low=103.00)
+    cycle6 = run_trading_cycle(force_market_open=True)
+    assert len(cycle6["targets_hit"]) == 1, "Expected FRESH.NS to exit via Day High >= target"
+    assert cycle6["targets_hit"][0]["symbol"] == "FRESH.NS"
+    print(f"[OK] Position successfully exited via Day High check: {cycle6['targets_hit'][0]}")
+
+    # 10b. Verify Sold-Today Exclusion: FRESH.NS was sold today and must NOT be considered for the rest of today
+    sold_today = get_sold_today_symbols()
+    assert "FRESH.NS" in sold_today, "FRESH.NS must be registered in sold_today_symbols"
+    assert not any(u["symbol"] == "FRESH.NS" for u in get_upcoming_trades()), "FRESH.NS must not appear in upcoming trades today"
+    assert not any(p["symbol"] == "FRESH.NS" for p in get_pending_watchlist()), "FRESH.NS must not appear in pending watchlist today"
+
+    # 10c. Simulate cycle again — FRESH.NS must NOT be re-bought today even if CMP > trigger
+    simulate_price_update("FRESH.NS", target_price=103.50)
+    cycle7 = run_trading_cycle(force_market_open=True)
+    rebuys = [b for b in cycle7["buys_triggered"] if b["symbol"] == "FRESH.NS"]
+    assert len(rebuys) == 0, "FRESH.NS must NOT be re-bought on the same day it was sold!"
+    print("[OK] Sold-Today Exclusion strictly verified: sold stock is never re-bought on the same day!")
+
     # Clean up test DB
     if TEST_DB_PATH.exists():
         try:

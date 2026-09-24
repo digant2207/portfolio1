@@ -108,17 +108,20 @@ The system determines the **Buy Trigger Price** using only two methods:
 During Indian stock market hours (**09:15 AM to 03:30 PM IST**, Monday to Friday):
 
 1. **Live Price Check:**
-   - Every cycle (default: every 15 minutes in GitHub Actions, or every 2 minutes in local server), the engine fetches live prices from NSE/BSE via Yahoo Finance.
+   - Every cycle (default: every 15 minutes in GitHub Actions, or every 2 minutes in local server), the engine fetches live quotes (`CMP`, `Day High`, `Day Low`, `Open`) from NSE/BSE via Yahoo Finance.
 2. **Trigger Evaluation:**
    - If $\text{Live CMP} \ge \text{Trigger Price}$, the buy rule is satisfied.
-3. **Portfolio & Capital Checks:**
+3. **🚫 Sold Today Exclusion (No Same-Day Re-Entry):**
+   - If a stock was **sold today** (whether via Target Hit, Stop-Loss Hit, or Manual Exit), the system **strictly excludes it from re-buying or being considered for the rest of the day**.
+   - It will neither appear in upcoming trades nor be bought again until a new trading day.
+4. **Portfolio & Capital Checks:**
    - **Capital per trade:** Exactly **₹10,000** (`trade_allocation`).
    - **Maximum open positions:** At most **10 active stocks** at the same time (`max_active_trades`).
    - **Available Cash:** Must have at least ₹10,000 cash in the portfolio.
    - **Quantity bought:**
      $$\text{Quantity} = \lfloor \frac{\text{₹10,000}}{\text{Live CMP}} \rfloor$$
      *(Example: If CMP is ₹450, Quantity = $\lfloor 10000 / 450 \rfloor = 22$ shares. Invested = ₹9,900).*
-4. **Order Execution:**
+5. **Order Execution:**
    - Position is opened in the database.
    - Deducts cash from portfolio balance.
    - Sends instant Telegram alert and records the trade.
@@ -127,18 +130,18 @@ During Indian stock market hours (**09:15 AM to 03:30 PM IST**, Monday to Friday
 
 ## 5️⃣ Step 5: Exit & Risk Management Rules (Automated Sell)
 
-For every open stock position, the engine monitors the live price every cycle:
+Because market checks run on intervals (e.g. every 15 minutes), a stock can hit its target or touch its stop-loss intraday and retrace before the next scheduled check. To ensure **zero missed exits**, the engine checks both **Live CMP** and **Today's High & Low**:
 
-| Exit Type | Condition | Formula | Action & Telegram Alert |
+| Exit Type | Condition | Formula Checked | Action & Telegram Alert |
 | :--- | :--- | :--- | :--- |
-| 🎯 **Target (Profit)** | Price gains **+5%** | $\text{CMP} \ge \text{Buy Price} \times 1.05$ | **SELL ALL SHARES** & lock in profit! |
-| 🛑 **Stop-Loss (Protection)** | Price drops **-2%** | $\text{CMP} \le \text{Buy Price} \times 0.98$ | **SELL ALL SHARES** & cut loss! |
-| ⚠️ **Sheet Stop-Loss (Column `Stop Loss`)** | Stop-Loss indicated in Sheet | $\text{CMP} \le \text{Sheet Stop Loss}$ OR text says `EXIT`/`SL` | **IMMEDIATE EXIT** & Instant Telegram Alert! |
+| 🎯 **Target (Profit)** | Price gains **+5%** | $\text{Live CMP} \ge \text{Target}$ **OR** $\text{Day's High} \ge \text{Target}$ | **SELL ALL SHARES** at Target price & lock in profit! |
+| 🛑 **Stop-Loss (Protection)** | Price drops **-2%** | $\text{Live CMP} \le \text{Stop Loss}$ **OR** $\text{Day's Low} \le \text{Stop Loss}$ | **SELL ALL SHARES** at Stop Loss & cut loss! |
+| ⚠️ **Sheet Stop-Loss (Column `Stop Loss`)** | Stop-Loss indicated in Sheet | $\text{Live CMP} \le \text{Sheet SL}$ **OR** $\text{Day's Low} \le \text{Sheet SL}$ OR text says `EXIT`/`SL` | **IMMEDIATE EXIT** & Instant Telegram Alert! |
 
 ### How the `Stop Loss` Column in the Google Sheet Works:
 If you enter a price or signal in the **`Stop Loss`** column of the Google Sheet for a stock you are currently holding:
 1. **Immediate Exit & Telegram Message:**
-   - If $\text{Live CMP} \le \text{Sheet Stop Loss}$ (or if you write `EXIT`, `SL`, or `SELL` in the column):
+   - If $\text{Live CMP} \le \text{Sheet Stop Loss}$ OR $\text{Day's Low} \le \text{Sheet Stop Loss}$ (or if you write `EXIT`, `SL`, or `SELL` in the column):
      - The system **immediately sells and closes the position** (`STOP_LOSS_HIT`).
      - Proceeds return to your cash balance.
      - You receive an **instant Stop-Loss alert on Telegram** with all trade metrics (Stock, Sell Price, Buy Price, Qty, Realized P&L).

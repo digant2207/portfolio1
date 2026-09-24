@@ -49,24 +49,29 @@ def get_market_status() -> Dict[str, Any]:
         "market_hours": "09:15 - 15:30 IST (Mon - Fri)"
     }
 
-def fetch_current_prices(symbols: List[str]) -> Dict[str, float]:
+def fetch_market_quotes(symbols: List[str]) -> Dict[str, Dict[str, float]]:
     """
-    Fetches latest price for given list of symbols (e.g. ['RELIANCE.NS', 'TCS.NS']).
-    Returns dict mapping symbol -> float price.
+    Fetches latest price, day high, day low, and open for given list of symbols.
+    Returns dict mapping symbol -> {"price": float, "high": float, "low": float, "open": float}.
     """
     if not symbols:
         return {}
         
     clean_symbols = list(set([s.strip().upper() for s in symbols if s]))
-    results: Dict[str, float] = {}
+    results: Dict[str, Dict[str, float]] = {}
     to_fetch: List[str] = []
     now_ts = datetime.now().timestamp()
     
     # Check cache
     for s in clean_symbols:
         cached = _price_cache.get(s)
-        if cached and (now_ts - cached["timestamp"]) < CACHE_TTL_SECONDS:
-            results[s] = cached["price"]
+        if cached and (now_ts - cached.get("timestamp", 0)) < CACHE_TTL_SECONDS:
+            results[s] = {
+                "price": cached.get("price", 0.0),
+                "high": cached.get("high", cached.get("price", 0.0)),
+                "low": cached.get("low", cached.get("price", 0.0)),
+                "open": cached.get("open", cached.get("price", 0.0))
+            }
         else:
             to_fetch.append(s)
             
@@ -83,20 +88,36 @@ def fetch_current_prices(symbols: List[str]) -> Dict[str, float]:
                 if len(chunk) == 1:
                     s = chunk[0]
                     if "Close" in df.columns:
-                        series = df["Close"].dropna()
-                        if not series.empty and float(series.iloc[-1]) > 0:
-                            results[s] = round(float(series.iloc[-1]), 2)
-                            _price_cache[s] = {"price": results[s], "timestamp": now_ts}
+                        c_series = df["Close"].dropna()
+                        h_series = df["High"].dropna() if "High" in df.columns else c_series
+                        l_series = df["Low"].dropna() if "Low" in df.columns else c_series
+                        o_series = df["Open"].dropna() if "Open" in df.columns else c_series
+                        if not c_series.empty and float(c_series.iloc[-1]) > 0:
+                            c = round(float(c_series.iloc[-1]), 2)
+                            h = round(float(h_series.iloc[-1]), 2) if not h_series.empty else c
+                            l = round(float(l_series.iloc[-1]), 2) if not l_series.empty else c
+                            o = round(float(o_series.iloc[-1]), 2) if not o_series.empty else c
+                            quote = {"price": c, "high": h, "low": l, "open": o}
+                            results[s] = quote
+                            _price_cache[s] = {**quote, "timestamp": now_ts}
                 else:
                     for s in chunk:
                         try:
                             if hasattr(df.columns, 'levels') and s in df.columns.levels[0]:
                                 t_df = df[s]
                                 if "Close" in t_df.columns:
-                                    series = t_df["Close"].dropna()
-                                    if not series.empty and float(series.iloc[-1]) > 0:
-                                        results[s] = round(float(series.iloc[-1]), 2)
-                                        _price_cache[s] = {"price": results[s], "timestamp": now_ts}
+                                    c_series = t_df["Close"].dropna()
+                                    h_series = t_df["High"].dropna() if "High" in t_df.columns else c_series
+                                    l_series = t_df["Low"].dropna() if "Low" in t_df.columns else c_series
+                                    o_series = t_df["Open"].dropna() if "Open" in t_df.columns else c_series
+                                    if not c_series.empty and float(c_series.iloc[-1]) > 0:
+                                        c = round(float(c_series.iloc[-1]), 2)
+                                        h = round(float(h_series.iloc[-1]), 2) if not h_series.empty else c
+                                        l = round(float(l_series.iloc[-1]), 2) if not l_series.empty else c
+                                        o = round(float(o_series.iloc[-1]), 2) if not o_series.empty else c
+                                        quote = {"price": c, "high": h, "low": l, "open": o}
+                                        results[s] = quote
+                                        _price_cache[s] = {**quote, "timestamp": now_ts}
                         except Exception:
                             pass
         except Exception as batch_err:
@@ -111,16 +132,40 @@ def fetch_current_prices(symbols: List[str]) -> Dict[str, float]:
                 info = getattr(t, "fast_info", None)
                 p = getattr(info, "last_price", None) or getattr(info, "regular_market_price", None)
                 if p and float(p) > 0:
-                    results[sym] = round(float(p), 2)
-                    _price_cache[sym] = {"price": results[sym], "timestamp": now_ts}
+                    c = round(float(p), 2)
+                    h = round(float(getattr(info, "day_high", None) or getattr(info, "dayHigh", None) or c), 2)
+                    l = round(float(getattr(info, "day_low", None) or getattr(info, "dayLow", None) or c), 2)
+                    o = round(float(getattr(info, "open", None) or getattr(info, "regular_market_open", None) or c), 2)
+                    quote = {"price": c, "high": h, "low": l, "open": o}
+                    results[sym] = quote
+                    _price_cache[sym] = {**quote, "timestamp": now_ts}
             except Exception:
                 pass
                 
     return results
 
-def simulate_price_update(symbol: str, target_price: float):
-    """Allows simulating a market price for test/demo purposes."""
-    _price_cache[symbol.strip().upper()] = {"price": round(target_price, 2), "timestamp": datetime.now().timestamp() + 3600}
+def fetch_current_prices(symbols: List[str]) -> Dict[str, float]:
+    """
+    Fetches latest price for given list of symbols (e.g. ['RELIANCE.NS', 'TCS.NS']).
+    Returns dict mapping symbol -> float price.
+    """
+    quotes = fetch_market_quotes(symbols)
+    return {s: q["price"] for s, q in quotes.items()}
+
+def simulate_price_update(symbol: str, target_price: float, high: Optional[float] = None, low: Optional[float] = None, open_price: Optional[float] = None):
+    """Allows simulating a market price and optional High/Low for test/demo purposes."""
+    sym = symbol.strip().upper()
+    c = round(target_price, 2)
+    h = round(high, 2) if high is not None else c
+    l = round(low, 2) if low is not None else c
+    o = round(open_price, 2) if open_price is not None else c
+    _price_cache[sym] = {
+        "price": c,
+        "high": h,
+        "low": l,
+        "open": o,
+        "timestamp": datetime.now().timestamp() + 3600
+    }
 
 # Volume cache with 4-hour TTL (1-month average volume changes very slowly)
 _volume_cache: Dict[str, Dict[str, Any]] = {}

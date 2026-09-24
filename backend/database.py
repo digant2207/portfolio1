@@ -304,7 +304,13 @@ def add_watchlist_items(items: List[Dict[str, Any]]) -> int:
             """, (sym,))
             row = cursor.fetchone()
             if row:
-                new_status = 'REJECTED' if row["status"] == 'REJECTED' else 'PENDING'
+                sold_today = get_sold_today_symbols()
+                if sym in sold_today:
+                    new_status = 'TRIGGERED'
+                elif row["status"] == 'REJECTED':
+                    new_status = 'REJECTED'
+                else:
+                    new_status = 'PENDING'
                 cursor.execute("""
                     UPDATE watchlist SET
                         report_date = ?,
@@ -331,18 +337,20 @@ def add_watchlist_items(items: List[Dict[str, Any]]) -> int:
                 ))
                 continue
 
-            # 3. New symbol not previously in watchlist: insert fresh PENDING row
+            # 3. New symbol not previously in watchlist: insert fresh PENDING row (or TRIGGERED if sold today)
+            sold_today = get_sold_today_symbols()
+            initial_status = 'TRIGGERED' if sym in sold_today else 'PENDING'
             cursor.execute("""
                 INSERT INTO watchlist (
                     report_date, stock_name, symbol, section,
                     cmp_report, dma_200, dma_50, trigger_price, status,
                     golden_cross, avg_volume_1m,
                     sheet_trigger, sheet_stop_loss, sheet_stop_loss_raw
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', 0, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)
             """, (
                 item["report_date"], item["stock_name"], sym,
                 item["section"], item["cmp_report"], item["dma_200"],
-                dma_50, item["trigger_price"],
+                dma_50, item["trigger_price"], initial_status,
                 avg_vol,
                 sheet_trig, sheet_sl, sheet_sl_raw
             ))
@@ -381,6 +389,20 @@ def update_position_stop_loss(position_id: int, stop_loss: float):
         conn.execute("UPDATE positions SET stop_loss = ? WHERE id = ?", (round(stop_loss, 2), position_id))
         conn.commit()
 
+def get_sold_today_symbols() -> set:
+    """
+    Returns set of stock symbols that have been sold today (closed positions).
+    Stocks sold today are strictly excluded from re-entry/re-buying for the rest of the day.
+    """
+    today_prefix = datetime.now().strftime("%Y-%m-%d")
+    with get_db() as conn:
+        rows = conn.execute("""
+            SELECT DISTINCT symbol FROM trades 
+            WHERE trade_type = 'SELL' 
+              AND (timestamp LIKE ? OR date(timestamp) = date('now', 'localtime') OR date(timestamp) = date('now'))
+        """, (f"{today_prefix}%",)).fetchall()
+        return {r["symbol"] for r in rows}
+
 def get_pending_watchlist() -> List[Dict[str, Any]]:
     cfg = load_config()
     min_price = cfg.get("min_stock_price", 20.0)
@@ -388,6 +410,7 @@ def get_pending_watchlist() -> List[Dict[str, Any]]:
     only_above = cfg.get("only_above_200_dma", True)
     max_buffer_pct = cfg.get("max_breakout_buffer_pct", 5.0)
     require_50_dma = cfg.get("require_above_50_dma", True)
+    sold_today = get_sold_today_symbols()
     with get_db() as conn:
         section_clause = "AND section = 'above_200_dma'" if only_above else ""
         query = f"""
@@ -404,18 +427,22 @@ def get_pending_watchlist() -> List[Dict[str, Any]]:
         unique_rows = []
         for r in rows:
             it = dict(r)
-            if it["symbol"] not in seen:
-                seen.add(it["symbol"])
-                # Option 1 & Option 4 filter (unless custom sheet trigger)
-                if not it.get("sheet_trigger"):
-                    cmp = it.get("current_price") or it.get("cmp_report", 0.0)
-                    dma_200 = float(it.get("dma_200") or 0.0)
-                    dma_50 = float(it.get("dma_50") or 0.0)
-                    if require_50_dma and dma_50 > 0 and cmp < dma_50:
-                        continue
-                    if max_buffer_pct > 0 and dma_200 > 0 and cmp > round(dma_200 * (1 + (max_buffer_pct / 100.0)), 2):
-                        continue
-                unique_rows.append(it)
+            sym = it["symbol"]
+            # Exclude duplicate symbols and stocks already sold today
+            if sym in seen or sym in sold_today:
+                continue
+            seen.add(sym)
+
+            # Option 1 & Option 4 filter (unless custom sheet trigger)
+            if not it.get("sheet_trigger"):
+                cmp = it.get("current_price") or it.get("cmp_report", 0.0)
+                dma_200 = float(it.get("dma_200") or 0.0)
+                dma_50 = float(it.get("dma_50") or 0.0)
+                if require_50_dma and dma_50 > 0 and cmp < dma_50:
+                    continue
+                if max_buffer_pct > 0 and dma_200 > 0 and cmp > round(dma_200 * (1 + (max_buffer_pct / 100.0)), 2):
+                    continue
+            unique_rows.append(it)
         return unique_rows
 
 def get_nearest_breakout_candidates(limit: int = 10, min_price: float = None, min_volume: float = None) -> List[Dict[str, Any]]:
@@ -424,6 +451,7 @@ def get_nearest_breakout_candidates(limit: int = 10, min_price: float = None, mi
     Strictly filters out penny stocks (CMP <= min_price) and illiquid stocks (1-month avg volume < min_volume).
     Filters only 'above_200_dma' when only_above_200_dma is active.
     Applies Option 1 (Fresh breakout zone <= 200 DMA + 5%) and Option 4 (CMP >= 50 DMA).
+    Excludes stocks sold today.
     """
     cfg = load_config()
     if min_price is None:
@@ -433,6 +461,7 @@ def get_nearest_breakout_candidates(limit: int = 10, min_price: float = None, mi
     only_above = cfg.get("only_above_200_dma", True)
     max_buffer_pct = cfg.get("max_breakout_buffer_pct", 5.0)
     require_50_dma = cfg.get("require_above_50_dma", True)
+    sold_today = get_sold_today_symbols()
 
     with get_db() as conn:
         section_clause = "AND section = 'above_200_dma'" if only_above else ""
@@ -449,7 +478,7 @@ def get_nearest_breakout_candidates(limit: int = 10, min_price: float = None, mi
         for r in rows:
             item = dict(r)
             sym = item["symbol"]
-            if sym in seen:
+            if sym in seen or sym in sold_today:
                 continue
             seen.add(sym)
             cmp = item.get("current_price") or item.get("cmp_report", 0.0)
@@ -572,7 +601,7 @@ def get_upcoming_trades(limit: int = 100) -> List[Dict[str, Any]]:
     Returns screened watchlist items that are candidates for upcoming buy triggers.
     Includes both PENDING and REJECTED items so the user can see and toggle their status.
     Calculates proximity percentage and distance to trigger price.
-    Strictly deduplicates by symbol and excludes stocks that are already open positions.
+    Strictly deduplicates by symbol, excludes open positions, and excludes stocks sold today.
     Applies Option 1 (Fresh breakout zone <= 200 DMA + 5%) and Option 4 (CMP >= 50 DMA).
     """
     cfg = load_config()
@@ -580,6 +609,7 @@ def get_upcoming_trades(limit: int = 100) -> List[Dict[str, Any]]:
     only_above = cfg.get("only_above_200_dma", True)
     max_buffer_pct = cfg.get("max_breakout_buffer_pct", 5.0)
     require_50_dma = cfg.get("require_above_50_dma", True)
+    sold_today = get_sold_today_symbols()
     with get_db() as conn:
         section_clause = "AND section = 'above_200_dma'" if only_above else ""
         query = f"""
@@ -595,7 +625,8 @@ def get_upcoming_trades(limit: int = 100) -> List[Dict[str, Any]]:
         for r in rows:
             it = dict(r)
             sym = it["symbol"]
-            if sym in seen_symbols:
+            # Exclude duplicate symbols and stocks already sold today
+            if sym in seen_symbols or sym in sold_today:
                 continue
             seen_symbols.add(sym)
 

@@ -290,13 +290,13 @@ def fetch_and_process_sheets() -> Tuple[bool, str, List[Dict[str, Any]]]:
     try:
         from .database import get_open_positions, update_position_stop_loss
         from .trading_engine import execute_stop_loss_exit
-        from .market_data import fetch_current_prices
+        from .market_data import fetch_market_quotes
 
         open_positions = get_open_positions()
         if open_positions:
             candidate_map = {c["symbol"]: c for c in candidates}
             symbols_to_check = [p["symbol"] for p in open_positions if p["symbol"] in candidate_map]
-            live_quotes = fetch_current_prices(symbols_to_check) if symbols_to_check else {}
+            live_quotes = fetch_market_quotes(symbols_to_check) if symbols_to_check else {}
 
             for pos in open_positions:
                 pos_sym = pos["symbol"]
@@ -309,11 +309,14 @@ def fetch_and_process_sheets() -> Tuple[bool, str, List[Dict[str, Any]]]:
                 if not raw_sl and not sl_num:
                     continue
 
-                cmp_val = live_quotes.get(pos_sym) or pos.get("current_price") or pos.get("buy_price")
+                q = live_quotes.get(pos_sym, {})
+                cmp_val = q.get("price") or pos.get("current_price") or pos.get("buy_price")
+                day_low = q.get("low") or cmp_val
                 is_exit_signal = str(raw_sl).strip().upper() in ["EXIT", "SL", "SELL", "CLOSE", "HIT", "STOP LOSS", "STOPLOSS"]
 
-                if is_exit_signal or (sl_num and sl_num > 0 and cmp_val <= sl_num):
-                    execute_stop_loss_exit(pos, cmp_val, exit_reason="STOP_LOSS_HIT")
+                if is_exit_signal or (sl_num and sl_num > 0 and (cmp_val <= sl_num or day_low <= sl_num)):
+                    exit_price = sl_num if (sl_num and day_low <= sl_num and cmp_val > sl_num) else cmp_val
+                    execute_stop_loss_exit(pos, exit_price, exit_reason="STOP_LOSS_HIT")
                     log_event("TRADE", f"🛑 Position {pos_sym} closed due to Google Sheet Stop-Loss indicator: {raw_sl or sl_num}")
                 elif sl_num and sl_num > 0 and sl_num != pos.get("stop_loss"):
                     update_position_stop_loss(pos["id"], sl_num)
