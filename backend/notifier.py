@@ -3,6 +3,7 @@ Notification module for daily paper trading summary reports.
 Sends comprehensive HTML report via Gmail SMTP at market close (or on demand).
 """
 import smtplib
+import html
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from datetime import datetime, date
@@ -302,11 +303,11 @@ def notify_daily_summary_telegram(summary: Dict[str, Any], todays_trades: List[D
     ]
 
     for idx, c in enumerate(candidates[:5], 1):
-        sym = c.get("symbol", "")
+        stock_name = html.escape(str(c.get("stock_name") or c.get("symbol", "")).strip())
         cmp_val = c.get("current_price") or c.get("cmp_report", 0.0)
         trig = c.get("trigger_price", 0.0)
         prox_status = c.get("proximity_status", "")
-        lines.append(f"<b>{idx}. <code>{sym}</code></b> | CMP: ₹{cmp_val:,.2f} | Trig: ₹{trig:,.2f}\n   <i>{prox_status}</i>")
+        lines.append(f"<b>{idx}. {stock_name}</b> | CMP: ₹{cmp_val:,.2f} | Trig: ₹{trig:,.2f}\n   <i>{prox_status}</i>")
 
     lines.append("━━━━━━━━━━━━━━━━━━")
     lines.append("📧 <i>Comprehensive report sent to your email inbox!</i>")
@@ -642,14 +643,14 @@ def notify_evening_watchlist_telegram(items: List[Dict[str, Any]]):
     ]
     
     for idx, it in enumerate(top_candidates, 1):
-        sym = it.get("symbol", "")
+        stock_name = html.escape(str(it.get("stock_name") or it.get("symbol", "")).strip())
         sec = "Above 200 DMA" if it.get("section") == "above_200_dma" else "Below 200 DMA"
         cmp_val = it.get("cmp_report", 0.0)
         dma_val = it.get("dma_200", 0.0)
         trig = it.get("trigger_price", 0.0)
         
         lines.append(
-            f"<b>{idx}. <code>{sym}</code></b> (<i>{sec}</i>)\n"
+            f"<b>{idx}. {stock_name}</b> (<i>{sec}</i>)\n"
             f"   💵 CMP: ₹{cmp_val:,.2f} | 200 DMA: ₹{dma_val:,.2f}\n"
             f"   🎯 <b>Trigger Buy:</b> ₹{trig:,.2f}\n"
         )
