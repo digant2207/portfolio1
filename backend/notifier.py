@@ -105,7 +105,7 @@ def generate_daily_report_html() -> Tuple[str, str, Dict[str, Any]]:
         for idx, c in enumerate(breakout_candidates, 1):
             is_above = c.get("section") == "above_200_dma"
             sec_badge = '<span style="background: rgba(16, 185, 129, 0.15); color: #10b981; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;">Above 200 DMA</span>' if is_above else '<span style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;">Below 200 DMA</span>'
-            gc_badge = '<br><span style="display: inline-block; margin-top: 4px; background: rgba(234, 179, 8, 0.2); color: #eab308; padding: 1px 6px; border-radius: 3px; font-size: 10px; font-weight: 700;">🌟 GOLDEN CROSS</span>' if c.get("golden_cross") else ""
+            gc_badge = ""
             
             cmp_val = c.get("current_price") or c.get("cmp_report", 0.0)
             trig_val = c.get("trigger_price", 0.0)
@@ -306,8 +306,7 @@ def notify_daily_summary_telegram(summary: Dict[str, Any], todays_trades: List[D
         cmp_val = c.get("current_price") or c.get("cmp_report", 0.0)
         trig = c.get("trigger_price", 0.0)
         prox_status = c.get("proximity_status", "")
-        gc = " 🌟" if c.get("golden_cross") else ""
-        lines.append(f"<b>{idx}. <code>{sym}</code></b>{gc} | CMP: ₹{cmp_val:,.2f} | Trig: ₹{trig:,.2f}\n   <i>{prox_status}</i>")
+        lines.append(f"<b>{idx}. <code>{sym}</code></b> | CMP: ₹{cmp_val:,.2f} | Trig: ₹{trig:,.2f}\n   <i>{prox_status}</i>")
 
     lines.append("━━━━━━━━━━━━━━━━━━")
     lines.append("📧 <i>Comprehensive report sent to your email inbox!</i>")

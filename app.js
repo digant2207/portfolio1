@@ -429,8 +429,8 @@ function renderUpcomingTrades() {
                     ? `<span class="badge badge-above">Above 200 DMA</span>` 
                     : `<span class="badge badge-below">Below 200 DMA</span>`;
 
-                const goldenBadge = item.golden_cross === 1 
-                    ? `<span class="badge badge-golden" title="Golden Cross Confirmed">🌟 Golden Cross</span>` 
+                const triggerBadge = item.sheet_trigger 
+                    ? `<span class="badge badge-warning" style="font-size:10px; padding:1px 5px;" title="Custom Trigger Price from Sheet">⚡ Custom Trigger</span>` 
                     : "";
 
                 let statusBadge = `<span class="badge badge-pending">Ready</span>`;
@@ -476,7 +476,7 @@ function renderUpcomingTrades() {
                 tableHtml += `
                     <tr class="${isRejected ? 'row-rejected' : ''}">
                         <td class="stock-symbol-cell">
-                            ${item.symbol} ${goldenBadge}
+                            ${item.symbol} ${triggerBadge}
                             <span class="stock-name-sub">${item.stock_name}</span>
                         </td>
                         <td>${sectionBadge}</td>

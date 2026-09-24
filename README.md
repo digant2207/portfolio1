@@ -86,7 +86,7 @@ Access your complete portfolio from your mobile phone or laptop browser anytime 
 - ⚡ **Today's Trades**: Dedicated view of buy orders and profit/loss exits executed today.
 - 🎯 **Upcoming Trades with 🛑 Stop / Reject Control**:
   - Live screened breakout candidates approaching 200 DMA + 1%.
-  - Distance % to trigger, volume, and Golden Cross confirmation.
+  - Distance % to trigger, volume, and custom sheet trigger indicators.
   - **🛑 Stop / Reject Button**: One-click action to stop automated buying for any stock.
   - **↺ Restore Button**: One-click action to re-enable stopped trades.
 - 📱 **Mobile & Laptop Optimized**:

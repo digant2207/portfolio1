@@ -11,7 +11,7 @@ Use this guide whenever you want to understand how trades happen, modify rules, 
 ```mermaid
 flowchart TD
     A["1. Google Sheet (757 Stocks)"] --> B["2. Filtering Rules\n(Price > ₹20, Vol >= 10k, Above 200 DMA)"]
-    B --> C["3. Watchlist & Triggers\n(Trigger = 200 DMA + 1%)"]
+    B --> C["3. Watchlist & Triggers\n(Custom Sheet Trigger OR 200 DMA + 1%)"]
     C --> D["4. Live Market Engine (9:15 - 15:30 IST)\nChecks live price every cycle"]
     D -->|"CMP >= Trigger"| E["BUY (₹10,000 per stock, Max 10 positions)"]
     E --> F{"Monitor Position"}
@@ -41,7 +41,7 @@ The system reads your single unified Google Sheet:
 
 ---
 
-## 2️⃣ Step 2: Filtering & Screening Candidates (Old Logic)
+## 2️⃣ Step 2: Filtering & Screening Candidates
 
 Before adding any stock to the trading watchlist, it must pass **3 safety filters**:
 
@@ -58,16 +58,18 @@ Before adding any stock to the trading watchlist, it must pass **3 safety filter
 - **Rule:** The stock's 30-day average daily volume must be at least **10,000 shares** (`min_1m_avg_volume`).
 - **Why:** Ensures we only trade liquid stocks that can be easily bought and sold.
 
-### Golden Cross Confirmation 🌟
-- If the sheet marks `DMA Signal = "Golden Cross"` (meaning 50 DMA is above 200 DMA):
-  - The stock is tagged as `golden_cross = True`.
-  - It receives top priority and is sorted at the top of the candidate watchlist.
+### 🚫 Golden Cross Trigger (REMOVED / DISABLED)
+> [!IMPORTANT]
+> **Golden Cross is NOT used as an entry trigger or priority condition.**
+> The system strictly applies only:
+> 1. Custom Trigger Price from Google Sheet `Trigger` column (if provided).
+> 2. 200 DMA + 1% Breakout Trigger (for all other eligible stocks).
 
 ---
 
 ## 3️⃣ Step 3: Trigger Price Calculation & Custom Sheet Triggers
 
-The system determines the **Buy Trigger Price** in two ways:
+The system determines the **Buy Trigger Price** using only two methods:
 
 ### Method A: Custom Trigger from Google Sheet (Top Priority) ⚡
 - If you write a price in the **`Trigger`** column of the sheet (for example: `SHARDAMOTR` has `986`):
@@ -76,13 +78,15 @@ The system determines the **Buy Trigger Price** in two ways:
   $$\text{Live CMP} \ge \text{Sheet Trigger Price}$$
 - When bought, standard Target (+5%) and Stop-Loss (-2%) are set automatically.
 
-### Method B: Default 200 DMA + 1% Breakout Formula (Fallback)
+### Method B: Default 200 DMA + 1% Breakout Formula
 - If the `Trigger` column is empty, the system calculates the trigger automatically:
   $$\text{Trigger Price} = \text{200 DMA} \times (1 + \frac{\text{trigger\_buffer\_pct}}{100})$$
 - Default buffer = **1.0%**
 - **Example:**
   - Stock 200 DMA = ₹1,000.00
   - Trigger Price = $1000 \times 1.01 = \text{₹1,010.00}$
+  - The system will monitor this stock and **buy** when:
+    $$\text{Live CMP} \ge \text{₹1,010.00}$$
 
 ---
 
@@ -156,8 +160,8 @@ Open [`config.json`](file:///c:/Users/DELL/.gemini/antigravity-ide/scratch/portf
 File: [`backend/sheet_reader.py`](file:///c:/Users/DELL/.gemini/antigravity-ide/scratch/portfolio1/backend/sheet_reader.py)
 
 - **Where candidate filtering happens:** inside `parse_combined_sheet()`
-  - Want to only buy Golden Cross stocks? Check `if dma_signal.lower() != "golden cross": continue`.
-  - Want to use 50 DMA instead of 200 DMA? Change `dma_col = row.get("50 DMA (₹)")`.
+  - Golden Cross trigger is currently removed (`golden_cross = 0`). If ever needed in the future, it can be re-enabled here.
+  - Custom sheet triggers are loaded from `row.get("Trigger")`. If blank, defaults to `200 DMA + 1%`.
   - Want high-volume breakouts? Check `if vol_pct < 100: continue` (volume today must exceed monthly avg).
 
 ---

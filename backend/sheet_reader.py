@@ -132,11 +132,11 @@ def parse_combined_sheet(csv_text: str) -> List[Dict[str, Any]]:
                      Vol. %, 5 DMA, 10 DMA, 20 DMA, 50 DMA (₹), 100 DMA, 200 DMA (₹),
                      52W High (₹), 52W Low (₹), DMA Signal, Transetion Day, Trigger, Stop Loss
 
-    Applies the existing (old) trading logic:
+    Applies trading logic:
     - Filters: CMP > min_stock_price (₹20), 1M Avg Volume >= min_1m_avg_volume (10,000)
     - Trend Section: 'above_200_dma' when CMP >= 200 DMA (only_above_200_dma = True)
-    - Trigger Price = round(200 DMA * (1 + trigger_buffer_pct / 100.0), 2)
-    - Golden Cross: True if DMA Signal == 'Golden Cross'
+    - Trigger Price: Custom Trigger from sheet if specified, else 200 DMA + 1% (200 DMA * 1.01)
+    - Golden Cross: Trigger removed as requested; apply only 200 DMA + 1% and custom trigger price.
     """
     cfg = load_config()
     buffer_pct = cfg.get("trigger_buffer_pct", 1.0)
@@ -205,7 +205,8 @@ def parse_combined_sheet(csv_text: str) -> List[Dict[str, Any]]:
             if avg_vol_1m > 0 and avg_vol_1m < min_volume:
                 continue
 
-            is_golden = (dma_signal.lower() == "golden cross")
+            # Golden cross trigger removed as of now: apply only 200 DMA + 1% and custom sheet triggers
+            is_golden = False
 
             results.append({
                 "report_date": today_str,
@@ -222,7 +223,7 @@ def parse_combined_sheet(csv_text: str) -> List[Dict[str, Any]]:
                 "avg_volume_1m": avg_vol_1m,
                 "volume_today": volume,
                 "vol_pct": vol_pct,
-                "golden_cross": is_golden,
+                "golden_cross": 0,
                 "dma_signal": dma_signal
             })
         except Exception:
@@ -257,19 +258,18 @@ def fetch_and_process_sheets() -> Tuple[bool, str, List[Dict[str, Any]]]:
         log_event("INFO", "Google Sheet fetched successfully, but no stocks matched current screening filters.")
         return True, "No candidate stocks matched current screening filters.", []
 
-    # 3. Sort candidates: Custom Triggers first, then Golden Cross, then by symbol
-    golden_count = sum(1 for c in candidates if c.get("golden_cross"))
+    # 3. Sort candidates: Custom Triggers first, then 200 DMA + 1% triggers (by symbol)
     custom_trig_count = sum(1 for c in candidates if c.get("sheet_trigger"))
+    dma_trig_count = len(candidates) - custom_trig_count
     candidates.sort(key=lambda x: (
         not bool(x.get("sheet_trigger")),   # Explicit custom triggers highest priority
-        not x.get("golden_cross", False),   # Golden Cross next
         0 if x["section"] == "above_200_dma" else 1,
         x["symbol"]
     ))
 
     # 4. Add to watchlist DB
     added = add_watchlist_items(candidates)
-    log_event("INFO", f"Google Sheets: Parsed {len(candidates)} candidate stocks ({golden_count} Golden Cross, {custom_trig_count} custom triggers). {added} new added to watchlist.")
+    log_event("INFO", f"Google Sheets: Parsed {len(candidates)} candidate stocks ({custom_trig_count} custom triggers, {dma_trig_count} 200 DMA + 1% triggers). {added} new added to watchlist.")
 
     # 5. Check if any currently open position has an indicated Stop Loss in the sheet
     try:
@@ -315,11 +315,11 @@ def fetch_and_process_sheets() -> Tuple[bool, str, List[Dict[str, Any]]]:
             from .notifier import send_evening_watchlist_email, notify_evening_watchlist_telegram
             send_evening_watchlist_email(candidates)
             notify_evening_watchlist_telegram(candidates)
-            record_notification_sent(today_str, "EVENING_WATCHLIST", f"Sent for {len(candidates)} candidate stocks ({golden_count} Golden Cross)")
+            record_notification_sent(today_str, "EVENING_WATCHLIST", f"Sent for {len(candidates)} candidate stocks ({custom_trig_count} custom triggers, {dma_trig_count} 200 DMA + 1% triggers)")
             log_event("INFO", f"Evening candidate watchlist notification dispatched for {today_str}.")
         except Exception as notify_err:
             log_event("WARNING", f"Evening watchlist notification dispatch warning: {notify_err}")
     else:
         log_event("INFO", f"Evening candidate watchlist for {today_str} already dispatched today. Skipping duplicate notifications.")
 
-    return True, f"Successfully fetched {len(candidates)} candidate stocks from Google Sheets. {added} added to watchlist. {golden_count} confirmed Golden Cross.", candidates
+    return True, f"Successfully fetched {len(candidates)} candidate stocks from Google Sheets. {added} added to watchlist ({custom_trig_count} custom triggers, {dma_trig_count} 200 DMA + 1% triggers).", candidates
