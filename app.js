@@ -402,8 +402,26 @@ function renderUpcomingTrades() {
         );
     }
 
-    // Update Badges
-    const pendingCount = items.filter(i => i.status === "PENDING").length;
+    // Deduplicate by symbol (prevent duplicate rows for the same stock)
+    const seenSymbols = new Set();
+    const uniqueFiltered = [];
+    for (const item of filtered) {
+        if (!seenSymbols.has(item.symbol)) {
+            seenSymbols.add(item.symbol);
+            uniqueFiltered.push(item);
+        }
+    }
+    filtered = uniqueFiltered;
+
+    // Update Badges (unique symbols)
+    const seenPending = new Set();
+    let pendingCount = 0;
+    for (const i of items) {
+        if (i.status === "PENDING" && !seenPending.has(i.symbol)) {
+            seenPending.add(i.symbol);
+            pendingCount++;
+        }
+    }
     if (el.badgeUpcomingCount) el.badgeUpcomingCount.textContent = pendingCount;
     if (el.bottomBadgeUpcoming) el.bottomBadgeUpcoming.textContent = pendingCount;
 

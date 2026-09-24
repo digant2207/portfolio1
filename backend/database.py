@@ -67,6 +67,27 @@ def _setup_tables(conn):
     except Exception:
         pass
     
+    # Auto-deduplicate watchlist: keep only the latest record per symbol for PENDING/REJECTED
+    try:
+        cursor.execute("""
+            DELETE FROM watchlist 
+            WHERE id NOT IN (
+                SELECT MAX(id) 
+                FROM watchlist 
+                GROUP BY symbol
+            )
+            AND status IN ('PENDING', 'REJECTED')
+        """)
+        # Ensure stocks already open in positions are marked TRIGGERED in watchlist
+        cursor.execute("""
+            UPDATE watchlist 
+            SET status = 'TRIGGERED' 
+            WHERE status = 'PENDING' 
+              AND symbol IN (SELECT symbol FROM positions WHERE status = 'OPEN')
+        """)
+    except Exception:
+        pass
+    
     # Open / Closed Positions
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS positions (
@@ -234,55 +255,92 @@ def add_watchlist_items(items: List[Dict[str, Any]]) -> int:
     with get_db() as conn:
         cursor = conn.cursor()
         for item in items:
+            sym = item["symbol"]
             avg_vol = float(item.get("avg_volume_1m") or 0.0)
 
             sheet_trig = item.get("sheet_trigger")
             sheet_sl = item.get("sheet_stop_loss")
             sheet_sl_raw = item.get("sheet_stop_loss_raw")
 
-            # Update existing or insert new
-            cursor.execute("""
-                SELECT id FROM watchlist 
-                WHERE report_date = ? AND symbol = ?
-            """, (item["report_date"], item["symbol"]))
-            row = cursor.fetchone()
-            if row:
+            # 1. If stock is already an open position in the portfolio, do not create a duplicate PENDING trade
+            cursor.execute("SELECT id FROM positions WHERE symbol = ? AND status = 'OPEN'", (sym,))
+            if cursor.fetchone():
                 cursor.execute("""
                     UPDATE watchlist SET
-                        avg_volume_1m = CASE WHEN ? > 0 THEN ? ELSE avg_volume_1m END,
-                        golden_cross = CASE WHEN ? = 1 THEN 1 ELSE golden_cross END,
+                        report_date = ?,
                         cmp_report = ?,
                         dma_200 = ?,
                         trigger_price = ?,
                         sheet_trigger = ?,
                         sheet_stop_loss = ?,
-                        sheet_stop_loss_raw = ?
+                        sheet_stop_loss_raw = ?,
+                        status = 'TRIGGERED'
+                    WHERE symbol = ?
+                """, (
+                    item["report_date"], item["cmp_report"], item["dma_200"],
+                    item["trigger_price"], sheet_trig, sheet_sl, sheet_sl_raw,
+                    sym
+                ))
+                continue
+
+            # 2. If symbol already exists in watchlist, update existing row (keep status: PENDING or REJECTED)
+            cursor.execute("""
+                SELECT id, status FROM watchlist 
+                WHERE symbol = ?
+                ORDER BY id DESC LIMIT 1
+            """, (sym,))
+            row = cursor.fetchone()
+            if row:
+                cursor.execute("""
+                    UPDATE watchlist SET
+                        report_date = ?,
+                        stock_name = ?,
+                        section = ?,
+                        cmp_report = ?,
+                        dma_200 = ?,
+                        trigger_price = ?,
+                        sheet_trigger = ?,
+                        sheet_stop_loss = ?,
+                        sheet_stop_loss_raw = ?,
+                        avg_volume_1m = CASE WHEN ? > 0 THEN ? ELSE avg_volume_1m END,
+                        golden_cross = 0
                     WHERE id = ?
                 """, (
-                    avg_vol, avg_vol,
-                    1 if item.get("golden_cross") else 0,
+                    item["report_date"], item["stock_name"], item["section"],
                     item["cmp_report"], item["dma_200"], item["trigger_price"],
                     sheet_trig, sheet_sl, sheet_sl_raw,
+                    avg_vol, avg_vol,
                     row["id"]
                 ))
                 continue
-                
+
+            # 3. New symbol not previously in watchlist: insert fresh PENDING row
             cursor.execute("""
                 INSERT INTO watchlist (
                     report_date, stock_name, symbol, section,
                     cmp_report, dma_200, trigger_price, status,
                     golden_cross, avg_volume_1m,
                     sheet_trigger, sheet_stop_loss, sheet_stop_loss_raw
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, 'PENDING', ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, 'PENDING', 0, ?, ?, ?, ?)
             """, (
-                item["report_date"], item["stock_name"], item["symbol"],
+                item["report_date"], item["stock_name"], sym,
                 item["section"], item["cmp_report"], item["dma_200"],
                 item["trigger_price"],
-                1 if item.get("golden_cross") else 0,
                 avg_vol,
                 sheet_trig, sheet_sl, sheet_sl_raw
             ))
             added += 1
+
+        # Post-processing cleanup: ensure at most 1 PENDING/REJECTED entry per symbol
+        cursor.execute("""
+            DELETE FROM watchlist 
+            WHERE id NOT IN (
+                SELECT MAX(id) 
+                FROM watchlist 
+                GROUP BY symbol
+            )
+            AND status IN ('PENDING', 'REJECTED')
+        """)
         conn.commit()
     return added
 
@@ -301,13 +359,21 @@ def get_pending_watchlist() -> List[Dict[str, Any]]:
         query = f"""
             SELECT * FROM watchlist 
             WHERE status = 'PENDING' 
+              AND symbol NOT IN (SELECT symbol FROM positions WHERE status = 'OPEN')
               {section_clause}
               AND cmp_report > ?
               AND (avg_volume_1m >= ? OR avg_volume_1m = 0)
-            ORDER BY id ASC
+            ORDER BY id DESC
         """
         rows = conn.execute(query, (min_price, min_volume)).fetchall()
-        return [dict(r) for r in rows]
+        seen = set()
+        unique_rows = []
+        for r in rows:
+            it = dict(r)
+            if it["symbol"] not in seen:
+                seen.add(it["symbol"])
+                unique_rows.append(it)
+        return unique_rows
 
 def get_nearest_breakout_candidates(limit: int = 10, min_price: float = None, min_volume: float = None) -> List[Dict[str, Any]]:
     """
@@ -324,10 +390,22 @@ def get_nearest_breakout_candidates(limit: int = 10, min_price: float = None, mi
 
     with get_db() as conn:
         section_clause = "AND section = 'above_200_dma'" if only_above else ""
-        rows = conn.execute(f"SELECT * FROM watchlist WHERE status = 'PENDING' {section_clause}").fetchall()
+        query = f"""
+            SELECT * FROM watchlist 
+            WHERE status = 'PENDING' 
+              AND symbol NOT IN (SELECT symbol FROM positions WHERE status = 'OPEN')
+              {section_clause}
+            ORDER BY id DESC
+        """
+        rows = conn.execute(query).fetchall()
+        seen = set()
         candidates = []
         for r in rows:
             item = dict(r)
+            sym = item["symbol"]
+            if sym in seen:
+                continue
+            seen.add(sym)
             cmp = item.get("current_price") or item.get("cmp_report", 0.0)
             item["current_price"] = cmp
             trig = item.get("trigger_price", 0.0)
@@ -439,6 +517,7 @@ def get_upcoming_trades(limit: int = 100) -> List[Dict[str, Any]]:
     Returns screened watchlist items that are candidates for upcoming buy triggers.
     Includes both PENDING and REJECTED items so the user can see and toggle their status.
     Calculates proximity percentage and distance to trigger price.
+    Strictly deduplicates by symbol and excludes stocks that are already open positions.
     """
     cfg = load_config()
     trade_alloc = cfg.get("trade_allocation", 10000.0)
@@ -448,13 +527,20 @@ def get_upcoming_trades(limit: int = 100) -> List[Dict[str, Any]]:
         query = f"""
             SELECT * FROM watchlist 
             WHERE status IN ('PENDING', 'REJECTED')
+              AND symbol NOT IN (SELECT symbol FROM positions WHERE status = 'OPEN')
               {section_clause}
             ORDER BY id DESC
         """
         rows = conn.execute(query).fetchall()
+        seen_symbols = set()
         items = []
         for r in rows:
             it = dict(r)
+            sym = it["symbol"]
+            if sym in seen_symbols:
+                continue
+            seen_symbols.add(sym)
+
             cmp = it.get("current_price") or it.get("cmp_report") or 0.0
             trig = it.get("trigger_price") or 0.0
             

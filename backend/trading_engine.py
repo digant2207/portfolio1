@@ -190,6 +190,9 @@ def run_trading_cycle(force_market_open: bool = False) -> Dict[str, Any]:
     min_1m_avg_vol = cfg.get("min_1m_avg_volume", 10000)
 
     # 2. Evaluate Pending Watchlist for Buy Triggers (200 DMA + 1%)
+    open_positions = get_open_positions()
+    open_symbols = {p["symbol"] for p in open_positions}
+
     with get_db() as conn:
         cursor = conn.cursor()
         
@@ -199,6 +202,9 @@ def run_trading_cycle(force_market_open: bool = False) -> Dict[str, Any]:
                 continue
 
             sym = item["symbol"]
+            if sym in open_symbols:
+                continue
+
             cmp = prices.get(sym)
             if not cmp:
                 continue
@@ -280,6 +286,7 @@ def run_trading_cycle(force_market_open: bool = False) -> Dict[str, Any]:
                 
                 cash_avail -= invested
                 current_pos_count += 1
+                open_symbols.add(sym)
                 
                 msg = f"🚀 BUY TRIGGERED: Bought {qty} shares of {sym} @ ₹{cmp} (Inv: ₹{invested}, SL: ₹{sl_price} [-2%], Tgt: ₹{target_price} [+5%])"
                 log_event("TRADE", msg, conn=conn)
