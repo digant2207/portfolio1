@@ -11,7 +11,9 @@ from typing import List, Dict, Any, Tuple, Optional
 from .config import load_config
 from .database import (
     get_portfolio_summary, get_open_positions, get_trades,
-    get_pending_watchlist, get_nearest_breakout_candidates, log_event, get_db
+    get_pending_watchlist, get_nearest_breakout_candidates, log_event, get_db,
+    # Portfolio 2
+    get_p2_portfolio_summary, get_p2_open_positions, get_p2_watchlist,
 )
 
 def generate_daily_report_html() -> Tuple[str, str, Dict[str, Any]]:
@@ -38,6 +40,12 @@ def generate_daily_report_html() -> Tuple[str, str, Dict[str, Any]]:
     breakout_candidates = get_nearest_breakout_candidates(limit=10)
     summary["breakout_candidates"] = breakout_candidates
     summary["todays_trades"] = todays_trades
+
+    # ── Portfolio 2 data for the combined report ───────────────────────────────
+    p2_summary   = get_p2_portfolio_summary()
+    p2_positions = get_p2_open_positions()
+    p2_watchlist = get_p2_watchlist(limit=5)  # Top 5 Wyckoff candidates by score
+    p2_report_section = _build_p2_report_section(p2_summary, p2_positions, p2_watchlist)
     
     total_val = summary.get("total_portfolio_value", 100000.0)
     cash = summary.get("cash_balance", 100000.0)
@@ -257,6 +265,9 @@ def generate_daily_report_html() -> Tuple[str, str, Dict[str, Any]]:
                 </table>
             </div>
 
+            <!-- Section 5: Portfolio 2 — Wyckoff Swing Delivery -->
+            {p2_report_section}
+
             <div class="rules-box">
                 <h4 style="margin: 0 0 8px 0; color: #38bdf8; font-size: 13px;">⚙️ Execution & Risk Management Rules:</h4>
                 <ul style="margin: 0; padding-left: 20px; color: #94a3b8; font-size: 12px; line-height: 1.6;">
@@ -311,7 +322,47 @@ def notify_daily_summary_telegram(summary: Dict[str, Any], todays_trades: List[D
 
     lines.append("━━━━━━━━━━━━━━━━━━")
     lines.append("📧 <i>Comprehensive report sent to your email inbox!</i>")
-    
+
+    # ── Portfolio 2 appendix block ─────────────────────────────────────────────
+    try:
+        p2 = get_p2_portfolio_summary()
+        p2_positions = get_p2_open_positions()
+        p2_watchlist = get_p2_watchlist(limit=3)
+        if p2:
+            p2_ret   = p2.get("total_return_pct", 0.0)
+            p2_sign  = "+" if p2_ret >= 0 else ""
+            p2_count = p2.get("open_positions_count", 0)
+            lines.append("")
+            lines.append("🌊 <b>PORTFOLIO 2 — WYCKOFF SWING (5–10 Days)</b>")
+            lines.append("━━━━━━━━━━━━━━━━━━")
+            lines.append(
+                f"💰 <b>P2 Value:</b> ₹{p2.get('total_portfolio_value',0):,.2f} "
+                f"({p2_sign}{p2_ret}%) | "
+                f"<b>Cash:</b> ₹{p2.get('cash_balance',0):,.2f}"
+            )
+            lines.append(f"💼 <b>Open Swings:</b> {p2_count} position(s)")
+            if p2_positions:
+                for pos in p2_positions[:3]:
+                    pnl     = pos.get("current_pnl", 0.0)
+                    pnl_pct = pos.get("current_pnl_pct", 0.0)
+                    sign    = "+" if pnl >= 0 else ""
+                    sess    = pos.get("sessions_held", 0)
+                    trail   = " 🚨Trail" if pos.get("trailing_active") else ""
+                    lines.append(
+                        f"  • <code>{pos['symbol']}</code> | "
+                        f"{sign}₹{pnl:,.2f} ({sign}{pnl_pct:.2f}%) | "
+                        f"Day {sess}/10{trail}"
+                    )
+            if p2_watchlist:
+                top = p2_watchlist[0]
+                lines.append(
+                    f"\n🔭 <b>Top Wyckoff Candidate:</b> <code>{top['symbol']}</code> "
+                    f"Score {top.get('wyckoff_score',0):.0f}/100 | Phase: {top.get('phase_label','').replace('_',' ')}"
+                )
+            lines.append("━━━━━━━━━━━━━━━━━━")
+    except Exception:
+        pass
+
     msg = "\n".join(lines)
     send_telegram_message(msg)
 
@@ -660,3 +711,295 @@ def notify_evening_watchlist_telegram(items: List[Dict[str, Any]]):
     
     full_msg = "\n".join(lines)
     send_telegram_message(full_msg)
+
+
+# ==============================================================================
+# Portfolio 2 — Wyckoff Swing Delivery Telegram Alerts
+# ==============================================================================
+
+def notify_p2_buy(trade: Dict[str, Any]):
+    """
+    Sends a Telegram alert when a Portfolio 2 Wyckoff swing BUY is executed.
+    Tagged clearly as [PORTFOLIO 2 – WYCKOFF SWING] so it's distinct from P1.
+    """
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    sym     = trade.get("symbol", "")
+    name    = trade.get("stock_name", sym)
+    price   = trade.get("buy_price") or trade.get("price", 0.0)
+    qty     = trade.get("quantity", 0)
+    invest  = trade.get("invested_amount", round(price * qty, 2))
+    sl      = trade.get("stop_loss", 0.0)
+    target  = trade.get("target_price", 0.0)
+    sl_pct  = trade.get("sl_pct", 3.5)
+    tgt_pct = trade.get("target_pct", 8.0)
+    score   = trade.get("wyckoff_score", 0.0)
+    phase   = trade.get("phase_label", "UNKNOWN").replace("_", " ")
+
+    msg = (
+        f"🌊 <b>[PORTFOLIO 2 – WYCKOFF SWING]</b>\n"
+        f"🚀 <b>SWING BUY EXECUTED</b>\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"📈 <b>Stock:</b> <code>{html.escape(sym)}</code> ({html.escape(name)})\n"
+        f"🔭 <b>Phase:</b> {phase} | <b>Score:</b> {score:.0f}/100\n"
+        f"💵 <b>Buy Price:</b> ₹{price:,.2f}\n"
+        f"🔢 <b>Quantity:</b> {qty}\n"
+        f"💰 <b>Invested:</b> ₹{invest:,.2f}\n"
+        f"🛑 <b>Stop-Loss (–{sl_pct:.1f}%):</b> ₹{sl:,.2f}\n"
+        f"🎯 <b>Target (+{tgt_pct:.0f}%):</b> ₹{target:,.2f}\n"
+        f"⏰ <b>Time:</b> {now_str}\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"<i>Trailing stop activates at +5% | Time-stop after 10 sessions</i>"
+    )
+    send_telegram_message(msg)
+
+
+def notify_p2_sell(trade: Dict[str, Any]):
+    """
+    Sends a Telegram alert when a Portfolio 2 swing position exits.
+    Supports exit reasons: TARGET_HIT, STOP_LOSS_HIT, TIME_STOP, TRAILING_STOP, MANUAL.
+    Tagged clearly as [PORTFOLIO 2 – WYCKOFF SWING].
+    """
+    now_str    = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    sym        = trade.get("symbol", "")
+    name       = trade.get("stock_name", sym)
+    reason     = trade.get("exit_reason", "SELL")
+    sell_price = trade.get("price") or trade.get("close_price", 0.0)
+    buy_price  = trade.get("buy_price", 0.0)
+    qty        = trade.get("quantity", 0)
+    pnl        = trade.get("pnl") or trade.get("realized_pnl", 0.0)
+    proceeds   = trade.get("proceeds", round(sell_price * qty, 2))
+    pnl_pct    = round(((sell_price - buy_price) / buy_price * 100), 2) if buy_price > 0 else 0.0
+    sign       = "+" if pnl >= 0 else ""
+    sessions   = trade.get("sessions_held", 0)
+
+    header_map = {
+        "TARGET_HIT":     "🎯 <b>SWING TARGET REACHED</b>",
+        "STOP_LOSS_HIT":  "🛑 <b>SWING STOP-LOSS TRIGGERED</b>",
+        "TIME_STOP":      "⏰ <b>SWING TIME-STOP EXIT (10 Sessions)</b>",
+        "TRAILING_STOP":  "🚨 <b>TRAILING STOP EXIT</b>",
+    }
+    header = header_map.get(reason, f"✋ <b>SWING POSITION CLOSED ({reason})</b>")
+
+    msg = (
+        f"🌊 <b>[PORTFOLIO 2 – WYCKOFF SWING]</b>\n"
+        f"{header}\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"📉 <b>Stock:</b> <code>{html.escape(sym)}</code> ({html.escape(name)})\n"
+        f"💵 <b>Exit Price:</b> ₹{sell_price:,.2f}\n"
+        f"🛒 <b>Buy Price:</b> ₹{buy_price:,.2f}\n"
+        f"🔢 <b>Quantity:</b> {qty} | <b>Sessions Held:</b> {sessions}\n"
+        f"💰 <b>Total Proceeds:</b> ₹{proceeds:,.2f}\n"
+        f"📊 <b>Realized P&L:</b> {sign}₹{pnl:,.2f} ({sign}{pnl_pct:.2f}%)\n"
+        f"⏰ <b>Time:</b> {now_str}\n"
+        f"━━━━━━━━━━━━━━━━━━"
+    )
+    send_telegram_message(msg)
+
+
+def notify_p2_scan_results(results: List[Dict[str, Any]]):
+    """
+    Sends a Telegram summary of the Wyckoff + VSA screener results.
+    Fires after each `POST /api/p2/actions/scan` call.
+    Lists the top 5 passing stocks ranked by score.
+    """
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    passed    = [r for r in results if r.get("passed") or r.get("wyckoff_score", 0) >= 60]
+    passed.sort(key=lambda x: x.get("wyckoff_score", 0), reverse=True)
+    top       = passed[:5]
+
+    if not top:
+        msg = (
+            f"🌊 <b>[PORTFOLIO 2 – WYCKOFF SCAN]</b>\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"📅 <b>Date:</b> {today_str}\n"
+            f"🔍 Scanned {len(results)} stocks — <b>0 passed</b> the Wyckoff threshold (≥60).\n"
+            f"━━━━━━━━━━━━━━━━━━"
+        )
+        send_telegram_message(msg)
+        return
+
+    lines = [
+        f"🌊 <b>[PORTFOLIO 2 – WYCKOFF SCAN RESULTS]</b>",
+        f"━━━━━━━━━━━━━━━━━━",
+        f"📅 <b>Date:</b> {today_str}",
+        f"✅ <b>{len(passed)}/{len(results)}</b> stocks passed (score ≥ 60)\n",
+        "<b>TOP 5 WYCKOFF CANDIDATES:</b>",
+    ]
+
+    phase_icon = {
+        "PHASE_D_MARKUP":      "🚀",
+        "PHASE_C_SPRING":      "🌱",
+        "PHASE_B_ACCUMULATION": "🏗",
+        "PHASE_A_STOPPING":    "⏸",
+        "UNCERTAIN":           "❓",
+    }
+
+    for idx, r in enumerate(top, 1):
+        sym     = html.escape(r.get("symbol", ""))
+        name    = html.escape(r.get("stock_name") or r.get("symbol", ""))
+        score   = r.get("wyckoff_score", 0.0)
+        phase   = r.get("phase_label", "UNKNOWN")
+        icon    = phase_icon.get(phase, "❓")
+        entry   = r.get("entry_price", 0.0)
+        sl      = r.get("stop_loss") or r.get("suggested_stop_loss", 0.0)
+        target  = r.get("target_price") or r.get("suggested_target", 0.0)
+        sl_pct  = r.get("sl_pct", 0.0)
+        tgt_pct = r.get("target_pct", 0.0)
+        spring  = "✅ Spring" if r.get("spring_detected") else ""
+        sos     = "✅ SOS" if r.get("sos_detected") else ""
+        signals = " | ".join(filter(None, [spring, sos])) or "No signals"
+
+        lines.append(
+            f"\n<b>{idx}. <code>{sym}</code></b> — Score: <b>{score:.0f}/100</b>\n"
+            f"   {icon} Phase: {phase.replace('_',' ')} | {signals}\n"
+            f"   💵 Entry: ₹{entry:,.2f} | 🛑 SL: ₹{sl:,.2f} (–{sl_pct:.1f}%) | 🎯 Tgt: ₹{target:,.2f} (+{tgt_pct:.0f}%)"
+        )
+
+    lines.append("\n━━━━━━━━━━━━━━━━━━")
+    lines.append("<i>Positions added to P2 Watchlist in the dashboard.</i>")
+    send_telegram_message("\n".join(lines))
+
+
+def _build_p2_report_section(
+    p2_summary: Dict[str, Any],
+    p2_positions: List[Dict[str, Any]],
+    p2_watchlist: List[Dict[str, Any]],
+) -> str:
+    """
+    Generates the HTML block for the Portfolio 2 section in the daily 6:30 PM report.
+    Returns an empty string if Portfolio 2 has no data (zero capital deployed, no candidates).
+    """
+    if not p2_summary:
+        return ""
+
+    p2_val   = p2_summary.get("total_portfolio_value", 0.0)
+    p2_cash  = p2_summary.get("cash_balance", 0.0)
+    p2_inv   = p2_summary.get("invested_capital", 0.0)
+    p2_ret   = p2_summary.get("total_return_pct", 0.0)
+    p2_pnl   = p2_summary.get("total_pnl", 0.0)
+    p2_sign  = "+" if p2_ret >= 0 else ""
+    pnl_sign = "+" if p2_pnl >= 0 else ""
+    p2_color = "#10b981" if p2_ret >= 0 else "#ef4444"
+    p2_count = p2_summary.get("open_positions_count", 0)
+
+    # Open swing positions rows
+    p2_pos_rows = ""
+    if p2_positions:
+        for pos in p2_positions:
+            pnl     = pos.get("current_pnl", 0.0)
+            pnl_pct = pos.get("current_pnl_pct", 0.0)
+            col     = "#10b981" if pnl >= 0 else "#ef4444"
+            s       = "+" if pnl >= 0 else ""
+            sess    = pos.get("sessions_held", 0)
+            trail   = "🚨 Trailing" if pos.get("trailing_active") else "—"
+            eff_sl  = pos.get("trailing_sl") if pos.get("trailing_active") else pos.get("stop_loss", 0.0)
+            p2_pos_rows += f"""
+            <tr style="border-bottom: 1px solid #1e293b;">
+                <td style="padding: 9px 12px; font-weight: 700; color: #f8fafc;">
+                    {html.escape(pos['symbol'])}
+                    <div style="font-size: 11px; color: #94a3b8;">{html.escape(pos.get('stock_name',''))}</div>
+                </td>
+                <td style="padding: 9px 12px; color: #94a3b8;">{pos['quantity']}</td>
+                <td style="padding: 9px 12px; color: #cbd5e1;">₹{pos['buy_price']:,.2f}</td>
+                <td style="padding: 9px 12px; color: #f8fafc; font-weight: 600;">₹{pos.get('current_price', pos['buy_price']):,.2f}</td>
+                <td style="padding: 9px 12px; color: #ef4444;">₹{eff_sl:,.2f}</td>
+                <td style="padding: 9px 12px; color: #10b981;">₹{pos.get('target_price', 0):,.2f}</td>
+                <td style="padding: 9px 12px; color: #64748b;">{sess}/10 &nbsp; {trail}</td>
+                <td style="padding: 9px 12px; color: {col}; font-weight: 700;">{s}₹{pnl:,.2f} ({s}{pnl_pct:.2f}%)</td>
+            </tr>"""
+    else:
+        p2_pos_rows = '<tr><td colspan="8" style="padding: 14px; text-align: center; color: #64748b;">No open Wyckoff swing positions.</td></tr>'
+
+    # Top Wyckoff candidates rows
+    p2_wl_rows = ""
+    if p2_watchlist:
+        for cand in p2_watchlist:
+            score  = cand.get("wyckoff_score", 0.0)
+            sc_col = "#10b981" if score >= 80 else "#f59e0b" if score >= 60 else "#64748b"
+            phase  = cand.get("phase_label", "UNKNOWN").replace("_", " ")
+            spring = "✅" if cand.get("spring_detected") else "—"
+            sos    = "✅" if cand.get("sos_detected") else "—"
+            p2_wl_rows += f"""
+            <tr style="border-bottom: 1px solid #1e293b;">
+                <td style="padding: 9px 12px; font-weight: 700; color: #f8fafc;">
+                    {html.escape(cand.get('symbol',''))}
+                    <div style="font-size: 11px; color: #94a3b8;">{html.escape(cand.get('stock_name',''))}</div>
+                </td>
+                <td style="padding: 9px 12px; color: {sc_col}; font-weight: 700; font-size: 15px;">{score:.0f}<span style="color: #64748b; font-size: 11px;">/100</span></td>
+                <td style="padding: 9px 12px; color: #cbd5e1; font-size: 12px;">{phase}</td>
+                <td style="padding: 9px 12px; color: #94a3b8;">{spring}</td>
+                <td style="padding: 9px 12px; color: #94a3b8;">{sos}</td>
+                <td style="padding: 9px 12px; color: #f8fafc;">₹{cand.get('entry_price', 0):,.2f}</td>
+                <td style="padding: 9px 12px; color: #ef4444;">₹{cand.get('suggested_stop_loss', 0):,.2f}</td>
+                <td style="padding: 9px 12px; color: #10b981;">₹{cand.get('suggested_target', 0):,.2f}</td>
+            </tr>"""
+    else:
+        p2_wl_rows = '<tr><td colspan="8" style="padding: 14px; text-align: center; color: #64748b;">No Wyckoff candidates. Run a scan from the dashboard.</td></tr>'
+
+    return f"""
+    <div style="margin: 0 0 0 0; border-top: 2px solid #7c3aed; padding: 0;">
+        <!-- P2 Summary Metrics -->
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; padding: 16px 20px; background: #0e0a1e;">
+            <div style="background: #1a1035; border: 1px solid #4c1d95; border-radius: 8px; padding: 12px; text-align: center;">
+                <div style="font-size: 10px; color: #a78bfa; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px;">P2 Total Value</div>
+                <div style="font-size: 17px; font-weight: 700; color: #f8fafc;">₹{p2_val:,.2f}</div>
+            </div>
+            <div style="background: #1a1035; border: 1px solid #4c1d95; border-radius: 8px; padding: 12px; text-align: center;">
+                <div style="font-size: 10px; color: #a78bfa; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px;">P2 Cash</div>
+                <div style="font-size: 17px; font-weight: 700; color: #f8fafc;">₹{p2_cash:,.2f}</div>
+            </div>
+            <div style="background: #1a1035; border: 1px solid #4c1d95; border-radius: 8px; padding: 12px; text-align: center;">
+                <div style="font-size: 10px; color: #a78bfa; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px;">P2 Swing Return</div>
+                <div style="font-size: 17px; font-weight: 700; color: {p2_color};">{p2_sign}{p2_ret:.2f}%</div>
+            </div>
+            <div style="background: #1a1035; border: 1px solid #4c1d95; border-radius: 8px; padding: 12px; text-align: center;">
+                <div style="font-size: 10px; color: #a78bfa; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px;">P2 Total P&amp;L</div>
+                <div style="font-size: 17px; font-weight: 700; color: {p2_color};">{pnl_sign}₹{p2_pnl:,.2f}</div>
+            </div>
+        </div>
+
+        <!-- P2 Open Swing Holdings -->
+        <div style="padding: 4px 20px 16px 20px; background: #0e0a1e;">
+            <h3 style="font-size: 14px; font-weight: 600; color: #a78bfa; margin: 0 0 10px 0; text-transform: uppercase; letter-spacing: 0.5px;">
+                🌊 P2 Active Swing Holdings ({p2_count})
+            </h3>
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                <thead>
+                    <tr>
+                        <th style="background: #140d2e; color: #64748b; font-weight: 600; text-align: left; padding: 8px 12px; border-bottom: 1px solid #2d1f5e;">Stock</th>
+                        <th style="background: #140d2e; color: #64748b; font-weight: 600; text-align: left; padding: 8px 12px; border-bottom: 1px solid #2d1f5e;">Qty</th>
+                        <th style="background: #140d2e; color: #64748b; font-weight: 600; text-align: left; padding: 8px 12px; border-bottom: 1px solid #2d1f5e;">Buy ₹</th>
+                        <th style="background: #140d2e; color: #64748b; font-weight: 600; text-align: left; padding: 8px 12px; border-bottom: 1px solid #2d1f5e;">CMP ₹</th>
+                        <th style="background: #140d2e; color: #64748b; font-weight: 600; text-align: left; padding: 8px 12px; border-bottom: 1px solid #2d1f5e;">Eff. SL</th>
+                        <th style="background: #140d2e; color: #64748b; font-weight: 600; text-align: left; padding: 8px 12px; border-bottom: 1px solid #2d1f5e;">Target</th>
+                        <th style="background: #140d2e; color: #64748b; font-weight: 600; text-align: left; padding: 8px 12px; border-bottom: 1px solid #2d1f5e;">Sessions</th>
+                        <th style="background: #140d2e; color: #64748b; font-weight: 600; text-align: left; padding: 8px 12px; border-bottom: 1px solid #2d1f5e;">P&amp;L</th>
+                    </tr>
+                </thead>
+                <tbody>{p2_pos_rows}</tbody>
+            </table>
+        </div>
+
+        <!-- P2 Top Wyckoff Candidates -->
+        <div style="padding: 4px 20px 20px 20px; background: #0e0a1e; border-bottom: 1px solid #1c263c;">
+            <h3 style="font-size: 14px; font-weight: 600; color: #a78bfa; margin: 0 0 10px 0; text-transform: uppercase; letter-spacing: 0.5px;">
+                🔭 Top Wyckoff Swing Candidates (by Score)
+            </h3>
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                <thead>
+                    <tr>
+                        <th style="background: #140d2e; color: #64748b; font-weight: 600; text-align: left; padding: 8px 12px; border-bottom: 1px solid #2d1f5e;">Stock</th>
+                        <th style="background: #140d2e; color: #64748b; font-weight: 600; text-align: left; padding: 8px 12px; border-bottom: 1px solid #2d1f5e;">Score</th>
+                        <th style="background: #140d2e; color: #64748b; font-weight: 600; text-align: left; padding: 8px 12px; border-bottom: 1px solid #2d1f5e;">Phase</th>
+                        <th style="background: #140d2e; color: #64748b; font-weight: 600; text-align: left; padding: 8px 12px; border-bottom: 1px solid #2d1f5e;">Spring</th>
+                        <th style="background: #140d2e; color: #64748b; font-weight: 600; text-align: left; padding: 8px 12px; border-bottom: 1px solid #2d1f5e;">SOS</th>
+                        <th style="background: #140d2e; color: #64748b; font-weight: 600; text-align: left; padding: 8px 12px; border-bottom: 1px solid #2d1f5e;">Entry ₹</th>
+                        <th style="background: #140d2e; color: #64748b; font-weight: 600; text-align: left; padding: 8px 12px; border-bottom: 1px solid #2d1f5e;">SL ₹</th>
+                        <th style="background: #140d2e; color: #64748b; font-weight: 600; text-align: left; padding: 8px 12px; border-bottom: 1px solid #2d1f5e;">Target ₹</th>
+                    </tr>
+                </thead>
+                <tbody>{p2_wl_rows}</tbody>
+            </table>
+        </div>
+    </div>
+    """

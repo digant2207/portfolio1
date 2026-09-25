@@ -8,6 +8,7 @@ const API_BASE = "";
 // State
 let appState = {
     isLiveBackend: false,
+    activePortfolio: 1,          // 1 = Portfolio 1 (200 DMA), 2 = Portfolio 2 (Wyckoff)
     portfolio: {},
     watchlist: [],
     upcomingTrades: [],
@@ -17,7 +18,12 @@ let appState = {
     logs: [],
     marketStatus: {},
     activeUpcomingFilter: "PENDING",
-    searchTerm: ""
+    searchTerm: "",
+    // Portfolio 2
+    p2Portfolio: {},
+    p2Watchlist: [],
+    p2Positions: [],
+    p2Trades: []
 };
 
 // Local storage key for offline/snapshot trade overrides
@@ -119,6 +125,7 @@ document.addEventListener("DOMContentLoaded", () => {
     initSearch();
     initModals();
     initActionButtons();
+    initPortfolioToggle();   // ← Portfolio 1/2 switcher
 
     // Initial data fetch
     refreshAllData();
@@ -268,6 +275,32 @@ async function refreshAllData() {
                     market: { is_open: false, message: `Snapshot from ${snap.generated_at}` },
                     snapshot_mode: true
                 };
+
+                // Also absorb any P2 data bundled inside the main snapshot
+                if (snap.portfolio2)  appState.p2Portfolio  = snap.portfolio2;
+                if (snap.p2_positions) appState.p2Positions = snap.p2_positions;
+                if (snap.p2_trades)    appState.p2Trades    = snap.p2_trades;
+                if (snap.p2_watchlist) appState.p2Watchlist = snap.p2_watchlist;
+            }
+
+            // Try dedicated P2 snapshot (data/p2_snapshot.json) separately
+            const p2SnapPaths = [
+                "./data/p2_snapshot.json",
+                "./p2_snapshot.json",
+                "https://raw.githubusercontent.com/digant2207/portfolio1/main/data/p2_snapshot.json"
+            ];
+            for (const p of p2SnapPaths) {
+                try {
+                    const r2 = await fetch(`${p}?t=${Date.now()}`);
+                    if (r2.ok) {
+                        const p2snap = await r2.json();
+                        if (p2snap.portfolio2)  appState.p2Portfolio  = p2snap.portfolio2;
+                        if (p2snap.p2_positions) appState.p2Positions = p2snap.p2_positions;
+                        if (p2snap.p2_trades)    appState.p2Trades    = p2snap.p2_trades;
+                        if (p2snap.p2_watchlist) appState.p2Watchlist = p2snap.p2_watchlist;
+                        break;
+                    }
+                } catch (_) {}
             }
         } catch (snapshotErr) {
             console.warn("Could not load snapshot:", snapshotErr);
@@ -1221,4 +1254,400 @@ function formatVolume(vol) {
 
 function round2(num) {
     return Math.round((Number(num) || 0) * 100) / 100;
+}
+
+// ============================================================================
+// PORTFOLIO 1 <-> PORTFOLIO 2 TOGGLE
+// ============================================================================
+
+function initPortfolioToggle() {
+    const btnP1 = document.getElementById("btn-p1");
+    const btnP2 = document.getElementById("btn-p2");
+    if (!btnP1 || !btnP2) return;
+
+    btnP1.addEventListener("click", () => switchPortfolio(1));
+    btnP2.addEventListener("click", () => switchPortfolio(2));
+
+    // Wyckoff Scan button
+    const btnScan = document.getElementById("btn-p2-scan");
+    if (btnScan) {
+        btnScan.addEventListener("click", runWyckoffScan);
+    }
+
+    // P2 tabs
+    document.querySelectorAll("#p2-tab-nav .tab-link").forEach(tab => {
+        tab.addEventListener("click", () => switchP2Tab(tab.getAttribute("data-tab")));
+    });
+}
+
+function switchPortfolio(portfolioNum) {
+    appState.activePortfolio = portfolioNum;
+
+    const btnP1 = document.getElementById("btn-p1");
+    const btnP2 = document.getElementById("btn-p2");
+    const p1Nav = document.getElementById("p1-tab-nav");
+    const p2Nav = document.getElementById("p2-tab-nav");
+    const brandTitle = document.getElementById("brand-title");
+    const brandStrategy = document.getElementById("brand-strategy");
+    const brandSubtitle = document.getElementById("brand-subtitle");
+
+    // All P1 tab panes
+    const p1Panes = document.querySelectorAll(".tab-pane:not(.p2-tab-pane)");
+    const p2Panes = document.querySelectorAll(".p2-tab-pane");
+
+    if (portfolioNum === 2) {
+        // Activate P2
+        btnP1 && btnP1.classList.remove("active");
+        btnP2 && btnP2.classList.add("active");
+        p1Nav && (p1Nav.style.display = "none");
+        p2Nav && (p2Nav.style.display = "");
+        p1Panes.forEach(p => p.style.display = "none");
+        if (brandTitle)   brandTitle.childNodes[0].textContent = "PORTFOLIO 2 ";
+        if (brandStrategy) brandStrategy.textContent = "Wyckoff";
+        if (brandSubtitle) brandSubtitle.textContent = "Swing Delivery (5\u201310 Days)";
+
+        // Activate first P2 tab
+        switchP2Tab("tab-p2-watchlist");
+
+        // Update metrics for Portfolio 2
+        renderP2Metrics();
+
+        // Load P2 data
+        if (appState.isLiveBackend) loadP2Data();
+    } else {
+        // Activate P1
+        btnP1 && btnP1.classList.add("active");
+        btnP2 && btnP2.classList.remove("active");
+        p1Nav && (p1Nav.style.display = "");
+        p2Nav && (p2Nav.style.display = "none");
+        p2Panes.forEach(p => p.style.display = "none");
+        if (brandTitle)   brandTitle.childNodes[0].textContent = "PORTFOLIO 1 ";
+        if (brandStrategy) brandStrategy.textContent = "200 DMA";
+        if (brandSubtitle) brandSubtitle.textContent = "Smart Money Trading Ledger";
+
+        // Restore first P1 tab
+        const firstP1Tab = document.querySelector("#p1-tab-nav .tab-link");
+        if (firstP1Tab) {
+            document.querySelectorAll("#p1-tab-nav .tab-link").forEach(t => t.classList.remove("active"));
+            firstP1Tab.classList.add("active");
+        }
+        const upcomingPane = document.getElementById("tab-upcoming");
+        if (upcomingPane) {
+            p1Panes.forEach(p => p.style.display = "");
+            p1Panes.forEach(p => p.classList.remove("active"));
+            upcomingPane.classList.add("active");
+        }
+        renderMetrics();
+    }
+}
+
+function switchP2Tab(tabId) {
+    document.querySelectorAll("#p2-tab-nav .tab-link").forEach(t =>
+        t.classList.toggle("active", t.getAttribute("data-tab") === tabId)
+    );
+    document.querySelectorAll(".p2-tab-pane").forEach(p => {
+        p.style.display = (p.id === tabId) ? "" : "none";
+    });
+}
+
+// ============================================================================
+// PORTFOLIO 2 DATA LOADER
+// ============================================================================
+
+async function loadP2Data() {
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        const [portRes, posRes, trRes, wlRes] = await Promise.all([
+            fetch(`${API_BASE}/api/p2/portfolio`,  { signal: controller.signal }).then(r => r.json()),
+            fetch(`${API_BASE}/api/p2/positions`,  { signal: controller.signal }).then(r => r.json()),
+            fetch(`${API_BASE}/api/p2/trades`,     { signal: controller.signal }).then(r => r.json()),
+            fetch(`${API_BASE}/api/p2/watchlist`,  { signal: controller.signal }).then(r => r.json()),
+        ]);
+        clearTimeout(timeoutId);
+        appState.p2Portfolio = portRes || {};
+        appState.p2Positions = posRes  || [];
+        appState.p2Trades    = trRes   || [];
+        appState.p2Watchlist = wlRes   || [];
+        renderP2Metrics();
+        renderP2Watchlist();
+        renderP2Positions();
+        renderP2Trades();
+        updateP2Badges();
+    } catch (e) {
+        console.warn("P2 data load error:", e);
+    }
+}
+
+async function runWyckoffScan() {
+    const btn = document.getElementById("btn-p2-scan");
+    if (btn) { btn.disabled = true; btn.textContent = "\ud83d\udd04 Scanning..."; }
+    try {
+        const res = await fetch(`${API_BASE}/api/p2/actions/scan`, { method: "POST" });
+        const data = await res.json();
+        if (data.success) {
+            showToast(`\u2705 ${data.message}`, "success");
+            await loadP2Data();
+        } else {
+            showToast(data.message || "Scan failed", "error");
+        }
+    } catch (e) {
+        showToast(`Scan error: ${e.message}`, "error");
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = "\ud83d\udd0d Run Wyckoff Scan"; }
+    }
+}
+
+// ============================================================================
+// PORTFOLIO 2 METRICS (swap the header cards when on P2)
+// ============================================================================
+
+function renderP2Metrics() {
+    const p = appState.p2Portfolio;
+    if (!p || !Object.keys(p).length) return;
+
+    const totalVal   = p.total_portfolio_value  ?? 100000;
+    const cash       = p.cash_balance           ?? 100000;
+    const invested   = p.invested_capital       ?? 0;
+    const mktVal     = p.positions_market_value ?? 0;
+    const posCount   = p.open_positions_count   ?? 0;
+    const ret        = p.total_return_pct       ?? 0;
+    const totalPnl   = p.total_pnl              ?? 0;
+    const realized   = p.realized_pnl           ?? 0;
+    const unrealized = p.unrealized_pnl         ?? 0;
+
+    const fmt = (n) => `\u20b9${Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+    if (el.valTotalPortfolio) el.valTotalPortfolio.textContent = fmt(totalVal);
+    if (el.valCashBalance)    el.valCashBalance.textContent    = fmt(cash);
+    if (el.valInvestedCapital) el.valInvestedCapital.textContent = fmt(invested);
+    if (el.valPositionsMkt)   el.valPositionsMkt.textContent   = fmt(mktVal);
+    if (el.valPositionsCount) el.valPositionsCount.textContent = `${posCount} / 5 Swing Slots`;
+
+    const sign = ret >= 0 ? "+" : "";
+    if (el.valTotalReturn) {
+        el.valTotalReturn.textContent = `${sign}${ret.toFixed(2)}%`;
+        el.valTotalReturn.className   = `return-indicator ${ret < 0 ? 'negative' : ''}`;
+    }
+
+    const pnlSign = totalPnl >= 0 ? "+" : "";
+    if (el.valTotalPnl) {
+        el.valTotalPnl.textContent = `${pnlSign}${fmt(totalPnl).slice(1)}`;
+        el.valTotalPnl.style.color = totalPnl >= 0 ? "var(--success)" : "var(--danger)";
+    }
+    if (el.valRealizedPnl) {
+        el.valRealizedPnl.textContent = `${realized >= 0 ? '+' : ''}${fmt(realized).slice(1)}`;
+        el.valRealizedPnl.className   = realized >= 0 ? "text-positive" : "text-danger";
+    }
+    if (el.valUnrealizedPnl) {
+        el.valUnrealizedPnl.textContent = `${unrealized >= 0 ? '+' : ''}${fmt(unrealized).slice(1)}`;
+        el.valUnrealizedPnl.className   = unrealized >= 0 ? "text-positive" : "text-danger";
+    }
+
+    // Slot dots (5 for P2)
+    if (el.slotsDotsContainer) {
+        let dots = "";
+        for (let i = 0; i < 5; i++) {
+            dots += `<span class="slot-dot ${i < posCount ? 'filled wyckoff' : ''}" title="Slot ${i+1}: ${i < posCount ? 'Active' : 'Empty'}"></span>`;
+        }
+        el.slotsDotsContainer.innerHTML = dots;
+    }
+
+    // Allocation bar
+    const totalAssets = Math.max(1, cash + mktVal);
+    const cashPct = Math.round((cash / totalAssets) * 100);
+    const invPct  = Math.max(0, 100 - cashPct);
+    if (el.allocationFillCash)     el.allocationFillCash.style.width     = `${cashPct}%`;
+    if (el.allocationFillInvested) el.allocationFillInvested.style.width = `${invPct}%`;
+    if (el.allocationPctCash)      el.allocationPctCash.textContent      = `${cashPct}%`;
+    if (el.allocationPctInvested)  el.allocationPctInvested.textContent  = `${invPct}%`;
+}
+
+function updateP2Badges() {
+    const wlBadge  = document.getElementById("badge-p2-watchlist-count");
+    const posBadge = document.getElementById("badge-p2-positions-count");
+    const trBadge  = document.getElementById("badge-p2-trades-count");
+    if (wlBadge)  wlBadge.textContent  = appState.p2Watchlist.length;
+    if (posBadge) posBadge.textContent = appState.p2Positions.length;
+    if (trBadge)  trBadge.textContent  = appState.p2Trades.length;
+}
+
+// ============================================================================
+// PORTFOLIO 2 RENDER FUNCTIONS
+// ============================================================================
+
+function renderP2Watchlist() {
+    const items = appState.p2Watchlist || [];
+    const tbody = document.getElementById("p2-watchlist-table-body");
+    const mobileDiv = document.getElementById("p2-watchlist-mobile-cards");
+    if (!tbody) return;
+
+    if (!items.length) {
+        tbody.innerHTML = '<tr><td colspan="11" class="table-empty">No Wyckoff candidates yet. Run a scan.</td></tr>';
+        if (mobileDiv) mobileDiv.innerHTML = "";
+        return;
+    }
+
+    const scoreColor = (s) => s >= 80 ? "var(--success)" : s >= 60 ? "var(--warning, #f59e0b)" : "var(--text-muted)";
+    const phaseIcon = { "PHASE_D_MARKUP": "\ud83d\ude80", "PHASE_C_SPRING": "\ud83c�", "PHASE_B_ACCUMULATION": "\ud83d�", "PHASE_A_STOPPING": "\u23f8\ufe0f", "UNCERTAIN": "\u2753" };
+    const fmt = (n) => `\u20b9${Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+    tbody.innerHTML = items.map(item => {
+        const score = Number(item.wyckoff_score || 0);
+        const phase = item.phase_label || "UNKNOWN";
+        const icon  = phaseIcon[phase] || "\u2753";
+        const spring = item.spring_detected ? "<span class='badge-yes'>\u2705 Spring</span>" : "<span class='badge-no'>\u2013</span>";
+        const sos    = item.sos_detected    ? "<span class='badge-yes'>\u2705 SOS</span>"    : "<span class='badge-no'>\u2013</span>";
+        const statusClass = { PENDING: "text-cyan", TRIGGERED: "text-positive", EXPIRED: "text-muted", REJECTED: "text-danger" }[item.status] || "";
+        return `
+        <tr>
+            <td><strong style="color:#f8fafc;">${item.symbol}</strong>
+                <div style="font-size:11px;color:#94a3b8;">${item.stock_name || ""}</div></td>
+            <td><span style="color:${scoreColor(score)};font-weight:700;font-size:15px;">${score.toFixed(0)}</span><span style="color:#64748b;font-size:11px;">/100</span></td>
+            <td><span title="${phase}">${icon} <span style="font-size:11px;">${phase.replace(/_/g,' ')}</span></span></td>
+            <td style="font-weight:600;">${fmt(item.cmp_report)}</td>
+            <td style="font-size:12px;color:#94a3b8;">
+                <span style="color:var(--danger)">${fmt(item.support)}</span> /
+                <span style="color:var(--success)">${fmt(item.resistance)}</span>
+            </td>
+            <td>${spring}</td>
+            <td>${sos}</td>
+            <td style="color:#f8fafc;">${fmt(item.entry_price)}</td>
+            <td style="color:var(--danger);">${fmt(item.suggested_stop_loss)} <span style="font-size:10px;color:#64748b;">(-${Number(item.sl_pct||0).toFixed(1)}%)</span></td>
+            <td style="color:var(--success);">${fmt(item.suggested_target)} <span style="font-size:10px;color:#64748b;">(+${Number(item.target_pct||0).toFixed(0)}%)</span></td>
+            <td><span class="${statusClass}">${item.status}</span></td>
+        </tr>`;
+    }).join("");
+
+    // Mobile cards
+    if (mobileDiv) {
+        mobileDiv.innerHTML = items.map(item => {
+            const score = Number(item.wyckoff_score || 0);
+            const phase = item.phase_label || "UNKNOWN";
+            const icon  = phaseIcon[phase] || "\u2753";
+            return `
+            <div class="position-card" style="border-left:3px solid ${scoreColor(score)};">
+                <div class="pos-card-header">
+                    <div>
+                        <span class="pos-symbol">${item.symbol}</span>
+                        <span class="pos-name">${item.stock_name || ""}</span>
+                    </div>
+                    <div style="text-align:right;">
+                        <span style="color:${scoreColor(score)};font-weight:700;font-size:18px;">${score.toFixed(0)}</span>
+                        <div style="font-size:10px;color:#64748b;">Wyckoff Score</div>
+                    </div>
+                </div>
+                <div class="pos-card-grid">
+                    <div><span class="pos-label">Phase</span><span>${icon} ${phase.replace(/_/g,' ')}</span></div>
+                    <div><span class="pos-label">CMP</span><span>${fmt(item.cmp_report)}</span></div>
+                    <div><span class="pos-label">Entry</span><span style="color:#f8fafc;font-weight:600;">${fmt(item.entry_price)}</span></div>
+                    <div><span class="pos-label">SL</span><span style="color:var(--danger);">${fmt(item.suggested_stop_loss)}</span></div>
+                    <div><span class="pos-label">Target</span><span style="color:var(--success);">${fmt(item.suggested_target)}</span></div>
+                    <div><span class="pos-label">Spring/SOS</span><span>${item.spring_detected?'\u2705 Spring':'\u2013'} ${item.sos_detected?'\u2705 SOS':''}</span></div>
+                </div>
+            </div>`;
+        }).join("");
+    }
+}
+
+function renderP2Positions() {
+    const items = appState.p2Positions || [];
+    const tbody = document.getElementById("p2-positions-table-body");
+    const mobileDiv = document.getElementById("p2-positions-mobile-cards");
+    if (!tbody) return;
+
+    if (!items.length) {
+        tbody.innerHTML = '<tr><td colspan="9" class="table-empty">No open Wyckoff swing positions.</td></tr>';
+        if (mobileDiv) mobileDiv.innerHTML = "";
+        return;
+    }
+
+    const fmt = (n) => `\u20b9${Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+    tbody.innerHTML = items.map(pos => {
+        const pnl     = Number(pos.current_pnl || 0);
+        const pnlPct  = Number(pos.current_pnl_pct || 0);
+        const pnlColor= pnl >= 0 ? "var(--success)" : "var(--danger)";
+        const pnlSign = pnl >= 0 ? "+" : "";
+        const effSL   = pos.trailing_active ? pos.trailing_sl : pos.stop_loss;
+        const trailing= pos.trailing_active
+            ? `<span style="color:var(--success);font-size:11px;">\ud83d\udea8 Active @ ${fmt(pos.trailing_sl)}</span>`
+            : `<span style="color:#64748b;font-size:11px;">Kicks in at +5%</span>`;
+        const sessions = Number(pos.sessions_held || 0);
+        const sessColor = sessions >= 8 ? "var(--danger)" : sessions >= 5 ? "var(--warning, #f59e0b)" : "var(--text-muted)";
+        return `
+        <tr>
+            <td><strong style="color:#f8fafc;">${pos.symbol}</strong>
+                <div style="font-size:11px;color:#94a3b8;">${pos.stock_name}</div></td>
+            <td>${pos.quantity}</td>
+            <td>${fmt(pos.buy_price)}</td>
+            <td style="font-weight:600;">${fmt(pos.current_price || pos.buy_price)}</td>
+            <td style="color:var(--danger);">${fmt(effSL)} <span style="font-size:10px;">(-${Number(pos.sl_pct||0).toFixed(1)}%)</span></td>
+            <td style="color:var(--success);">${fmt(pos.target_price)} <span style="font-size:10px;">(+${Number(pos.target_pct||0).toFixed(0)}%)</span></td>
+            <td style="color:${sessColor};font-weight:600;">${sessions}<span style="color:#64748b;font-size:11px;">/10</span></td>
+            <td>${trailing}</td>
+            <td style="color:${pnlColor};font-weight:700;">${pnlSign}${fmt(pnl).slice(1)}
+                <div style="font-size:11px;">(${pnlSign}${pnlPct.toFixed(2)}%)</div></td>
+        </tr>`;
+    }).join("");
+
+    if (mobileDiv) {
+        mobileDiv.innerHTML = items.map(pos => {
+            const pnl     = Number(pos.current_pnl || 0);
+            const pnlPct  = Number(pos.current_pnl_pct || 0);
+            const pnlColor= pnl >= 0 ? "var(--success)" : "var(--danger)";
+            const pnlSign = pnl >= 0 ? "+" : "";
+            const effSL   = pos.trailing_active ? pos.trailing_sl : pos.stop_loss;
+            const sessions = Number(pos.sessions_held || 0);
+            return `
+            <div class="position-card" style="border-left:3px solid ${pnlColor};">
+                <div class="pos-card-header">
+                    <div><span class="pos-symbol">${pos.symbol}</span><span class="pos-name">${pos.stock_name}</span></div>
+                    <div style="text-align:right;color:${pnlColor};font-weight:700;">${pnlSign}${fmt(pnl).slice(1)}<div style="font-size:11px;">${pnlSign}${pnlPct.toFixed(2)}%</div></div>
+                </div>
+                <div class="pos-card-grid">
+                    <div><span class="pos-label">Qty</span><span>${pos.quantity} shares</span></div>
+                    <div><span class="pos-label">Buy</span><span>${fmt(pos.buy_price)}</span></div>
+                    <div><span class="pos-label">CMP</span><span style="font-weight:600;">${fmt(pos.current_price||pos.buy_price)}</span></div>
+                    <div><span class="pos-label">Eff. SL</span><span style="color:var(--danger);">${fmt(effSL)}</span></div>
+                    <div><span class="pos-label">Target</span><span style="color:var(--success);">${fmt(pos.target_price)}</span></div>
+                    <div><span class="pos-label">Sessions</span><span>${sessions}/10 ${pos.trailing_active?'\ud83d\udea8 Trail':''}</span></div>
+                </div>
+            </div>`;
+        }).join("");
+    }
+}
+
+function renderP2Trades() {
+    const trades = appState.p2Trades || [];
+    const tbody  = document.getElementById("p2-trades-table-body");
+    if (!tbody) return;
+
+    if (!trades.length) {
+        tbody.innerHTML = '<tr><td colspan="9" class="table-empty">No Portfolio 2 trades recorded yet.</td></tr>';
+        return;
+    }
+
+    const fmt = (n) => `\u20b9${Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const reasonLabel = { TARGET_HIT: "\ud83c� Target", STOP_LOSS_HIT: "\ud83d� Stop-Loss", TIME_STOP: "\u23f0 Time-Stop", TRAILING_STOP: "\ud83d� Trailing", MANUAL: "\u270b Manual" };
+
+    tbody.innerHTML = trades.map((t, i) => {
+        const isBuy  = t.trade_type === "BUY";
+        const pnl    = Number(t.pnl || 0);
+        const pnlStr = !isBuy
+            ? `<span style="color:${pnl>=0?'var(--success)':'var(--danger)'};">${pnl>=0?'+':''}${fmt(pnl).slice(1)}</span>`
+            : `<span style="color:#64748b;">\u2014</span>`;
+        return `
+        <tr>
+            <td style="color:#64748b;">${t.id || i+1}</td>
+            <td><span class="trade-type-badge ${isBuy?'buy':'sell'}">${t.trade_type}</span></td>
+            <td><strong>${t.symbol}</strong><div style="font-size:11px;color:#94a3b8;">${t.stock_name||''}</div></td>
+            <td>${fmt(t.price)}</td>
+            <td>${t.quantity}</td>
+            <td>${fmt(t.total_value)}</td>
+            <td>${pnlStr}</td>
+            <td style="font-size:12px;">${reasonLabel[t.exit_reason] || (t.exit_reason || '\u2014')}</td>
+            <td style="font-size:11px;color:#64748b;">${(t.timestamp||'').split('.')[0]}</td>
+        </tr>`;
+    }).join("");
 }

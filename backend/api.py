@@ -15,7 +15,10 @@ from .config import load_config, save_config, BASE_DIR
 from .database import (
     init_db, get_portfolio_summary, get_all_watchlist, get_open_positions,
     get_trades, get_logs, reset_portfolio, add_watchlist_items, log_event,
-    update_watchlist_status, get_today_trades, get_upcoming_trades, export_portfolio_snapshot
+    update_watchlist_status, get_today_trades, get_upcoming_trades, export_portfolio_snapshot,
+    # Portfolio 2
+    get_p2_portfolio_summary, get_p2_open_positions, get_p2_trades, get_p2_watchlist,
+    upsert_p2_watchlist, increment_p2_session_counters, export_p2_snapshot,
 )
 from .market_data import get_market_status, simulate_price_update
 from .sheet_reader import fetch_and_process_sheets, clean_sheet_symbol
@@ -279,6 +282,92 @@ def api_reset_portfolio():
     reset_portfolio()
     export_portfolio_snapshot()
     return {"success": True, "message": "Portfolio has been reset to ₹1,00,000 baseline."}
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Portfolio 2 — Wyckoff Swing Delivery endpoints
+# ──────────────────────────────────────────────────────────────────────────────
+
+@app.get("/api/p2/portfolio")
+def api_p2_portfolio():
+    """Portfolio 2 summary (cash, invested, P&L)."""
+    return get_p2_portfolio_summary()
+
+
+@app.get("/api/p2/positions")
+def api_p2_positions():
+    """All open Portfolio 2 Wyckoff swing positions."""
+    return get_p2_open_positions()
+
+
+@app.get("/api/p2/trades")
+def api_p2_trades(limit: int = 50):
+    """Portfolio 2 trade history."""
+    return get_p2_trades(limit=limit)
+
+
+@app.get("/api/p2/watchlist")
+def api_p2_watchlist(limit: int = 50):
+    """Portfolio 2 Wyckoff watchlist sorted by score descending."""
+    return get_p2_watchlist(limit=limit)
+
+
+@app.post("/api/p2/actions/scan")
+def api_p2_scan(symbols: Optional[List[str]] = Body(None)):
+    """
+    Runs the Wyckoff + VSA screener on the provided list of NSE symbols.
+    If no symbols are provided, scans the current Portfolio 1 watchlist symbols.
+    Returns all screened results sorted by Wyckoff score (highest first).
+    """
+    from .wyckoff_analyzer import analyze_stock, result_to_dict
+    from datetime import datetime
+
+    if not symbols:
+        # Fall back to Portfolio 1 watchlist symbols
+        wl = get_all_watchlist(limit=100)
+        symbols = list({w["symbol"] for w in wl if w.get("symbol")})
+
+    if not symbols:
+        return {"success": False, "message": "No symbols to scan.", "results": []}
+
+    results = []
+    passed  = []
+    today   = datetime.now().strftime("%Y-%m-%d")
+
+    for sym in symbols:
+        r = analyze_stock(sym)
+        d = result_to_dict(r)
+        d["report_date"] = today
+        results.append(d)
+        if r.passed:
+            passed.append(d)
+
+    # Upsert passing stocks into P2 watchlist
+    if passed:
+        upsert_p2_watchlist(passed)
+        export_p2_snapshot()
+
+    results.sort(key=lambda x: x["wyckoff_score"], reverse=True)
+    return {
+        "success":      True,
+        "total_scanned": len(results),
+        "total_passed":  len(passed),
+        "message":      f"Scanned {len(results)} stocks. {len(passed)} passed Wyckoff screening (score >= 60).",
+        "results":      results,
+    }
+
+
+@app.get("/api/p2/snapshot")
+def api_p2_snapshot():
+    """Full Portfolio 2 JSON snapshot (summary + positions + trades + watchlist)."""
+    return export_p2_snapshot()
+
+
+@app.post("/api/p2/actions/increment-sessions")
+def api_p2_increment_sessions():
+    """Increments sessions_held counter for all open P2 positions by 1 (call at market close)."""
+    count = increment_p2_session_counters()
+    return {"success": True, "positions_updated": count, "message": f"Session counter incremented for {count} open Portfolio 2 positions."}
 
 # Serve frontend static files
 if FRONTEND_DIR.exists():

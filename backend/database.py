@@ -14,6 +14,7 @@ _DB_INITIALIZED = False
 def _setup_tables(conn):
     cursor = conn.cursor()
     # Portfolio Summary Table
+    # id=1 => Portfolio 1 (200 DMA Breakout), id=2 => Portfolio 2 (Wyckoff Swing Delivery)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS portfolio_state (
             id INTEGER PRIMARY KEY,
@@ -106,7 +107,7 @@ def _setup_tables(conn):
     except Exception:
         pass
     
-    # Open / Closed Positions
+    # Open / Closed Positions (Portfolio 1)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS positions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -127,6 +128,86 @@ def _setup_tables(conn):
             close_timestamp TIMESTAMP,
             realized_pnl REAL DEFAULT 0.0,
             exit_reason TEXT                -- 'TARGET_HIT', 'STOP_LOSS_HIT', 'MANUAL'
+        )
+    """)
+
+    # ── Portfolio 2: Wyckoff Swing Watchlist ──────────────────────────────────
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS p2_watchlist (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            report_date TEXT NOT NULL,
+            stock_name TEXT NOT NULL,
+            symbol TEXT NOT NULL,
+            cmp_report REAL NOT NULL,
+            wyckoff_score REAL DEFAULT 0.0,
+            phase_label TEXT DEFAULT 'UNKNOWN',
+            support REAL DEFAULT 0.0,
+            resistance REAL DEFAULT 0.0,
+            range_width_pct REAL DEFAULT 0.0,
+            absorption_score REAL DEFAULT 0.0,
+            demand_score REAL DEFAULT 0.0,
+            spring_detected INTEGER DEFAULT 0,
+            spring_low REAL DEFAULT 0.0,
+            sos_detected INTEGER DEFAULT 0,
+            sos_candle_date TEXT,
+            avg_volume_20d REAL DEFAULT 0.0,
+            ema_10 REAL DEFAULT 0.0,
+            entry_price REAL DEFAULT 0.0,
+            suggested_stop_loss REAL DEFAULT 0.0,
+            sl_pct REAL DEFAULT 0.0,
+            suggested_target REAL DEFAULT 0.0,
+            target_pct REAL DEFAULT 0.0,
+            status TEXT DEFAULT 'PENDING',  -- 'PENDING', 'TRIGGERED', 'EXPIRED', 'REJECTED'
+            current_price REAL,
+            last_checked TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    # ── Portfolio 2: Wyckoff Swing Positions ──────────────────────────────────
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS p2_positions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            p2_watchlist_id INTEGER,
+            stock_name TEXT NOT NULL,
+            symbol TEXT NOT NULL,
+            buy_price REAL NOT NULL,
+            quantity INTEGER NOT NULL,
+            invested_amount REAL NOT NULL,
+            stop_loss REAL NOT NULL,         -- -3.5% to -5% below Spring low / support
+            target_price REAL NOT NULL,      -- +8% to +14%
+            sl_pct REAL DEFAULT 3.5,
+            target_pct REAL DEFAULT 8.0,
+            trailing_active INTEGER DEFAULT 0,  -- 1 once gain hits +5%
+            trailing_sl REAL DEFAULT 0.0,       -- Updated trailing SL
+            sessions_held INTEGER DEFAULT 0,    -- Incremented daily; exit after 10
+            wyckoff_score REAL DEFAULT 0.0,
+            phase_label TEXT DEFAULT 'UNKNOWN',
+            buy_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            current_price REAL,
+            unrealized_pnl REAL DEFAULT 0.0,
+            status TEXT DEFAULT 'OPEN',      -- 'OPEN', 'CLOSED'
+            close_price REAL,
+            close_timestamp TIMESTAMP,
+            realized_pnl REAL DEFAULT 0.0,
+            exit_reason TEXT                 -- 'TARGET_HIT', 'STOP_LOSS_HIT', 'TIME_STOP', 'TRAILING_STOP', 'MANUAL'
+        )
+    """)
+
+    # ── Portfolio 2: Trades log ───────────────────────────────────────────────
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS p2_trades (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            position_id INTEGER,
+            symbol TEXT NOT NULL,
+            stock_name TEXT NOT NULL,
+            trade_type TEXT NOT NULL,    -- 'BUY', 'SELL'
+            price REAL NOT NULL,
+            quantity INTEGER NOT NULL,
+            total_value REAL NOT NULL,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            pnl REAL DEFAULT 0.0,
+            exit_reason TEXT
         )
     """)
     
@@ -185,14 +266,24 @@ def init_db():
     cfg = load_config()
     with get_db() as conn:
         cursor = conn.cursor()
-        # Initialize default portfolio if empty
-        cursor.execute("SELECT COUNT(*) FROM portfolio_state")
+        # Initialize Portfolio 1 if empty
+        cursor.execute("SELECT COUNT(*) FROM portfolio_state WHERE id = 1")
         if cursor.fetchone()[0] == 0:
             cursor.execute("""
                 INSERT INTO portfolio_state (id, total_capital, cash_balance, invested_capital, realized_pnl)
                 VALUES (1, ?, ?, 0.0, 0.0)
             """, (cfg["total_capital"], cfg["total_capital"]))
-            conn.commit()
+
+        # Initialize Portfolio 2 if empty (separate ₹1,00,000 capital)
+        p2_capital = cfg.get("p2_total_capital", 100000.0)
+        cursor.execute("SELECT COUNT(*) FROM portfolio_state WHERE id = 2")
+        if cursor.fetchone()[0] == 0:
+            cursor.execute("""
+                INSERT INTO portfolio_state (id, total_capital, cash_balance, invested_capital, realized_pnl)
+                VALUES (2, ?, ?, 0.0, 0.0)
+            """, (p2_capital, p2_capital))
+
+        conn.commit()
 
 def is_notification_sent(report_date: str, notification_type: str) -> bool:
     """Checks if a specific notification has already been dispatched on the given date."""
@@ -749,3 +840,197 @@ def export_portfolio_snapshot(export_path: Optional[str] = None) -> Dict[str, An
             
     return snapshot
 
+
+# ============================================================================
+# Portfolio 2 — Wyckoff Swing Delivery helpers
+# ============================================================================
+
+def get_p2_portfolio_summary() -> Dict[str, Any]:
+    """Returns Portfolio 2 summary (mirrors get_portfolio_summary for id=2)."""
+    with get_db() as conn:
+        state = conn.execute("SELECT * FROM portfolio_state WHERE id = 2").fetchone()
+        if not state:
+            return {}
+        positions = conn.execute("SELECT * FROM p2_positions WHERE status = 'OPEN'").fetchall()
+        total_invested = sum(p["invested_amount"] for p in positions)
+        mkt_val = sum((p["current_price"] or p["buy_price"]) * p["quantity"] for p in positions)
+        unrealized = sum(((p["current_price"] or p["buy_price"]) - p["buy_price"]) * p["quantity"] for p in positions)
+        cash = state["cash_balance"]
+        total_val = cash + mkt_val
+        realized = state["realized_pnl"]
+        conn.execute(
+            "UPDATE portfolio_state SET invested_capital = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 2",
+            (total_invested,)
+        )
+        conn.commit()
+        return {
+            "portfolio_id":         2,
+            "strategy":             "Wyckoff Swing Delivery (5–10 Days)",
+            "initial_capital":      state["total_capital"],
+            "cash_balance":         round(cash, 2),
+            "invested_capital":     round(total_invested, 2),
+            "positions_market_value": round(mkt_val, 2),
+            "total_portfolio_value": round(total_val, 2),
+            "realized_pnl":         round(realized, 2),
+            "unrealized_pnl":       round(unrealized, 2),
+            "total_pnl":            round(realized + unrealized, 2),
+            "total_return_pct":     round(((total_val - state["total_capital"]) / state["total_capital"]) * 100, 2),
+            "open_positions_count": len(positions),
+        }
+
+
+def get_p2_open_positions() -> List[Dict[str, Any]]:
+    """Returns all open Portfolio 2 Wyckoff swing positions with live P&L."""
+    with get_db() as conn:
+        rows = conn.execute("SELECT * FROM p2_positions WHERE status = 'OPEN' ORDER BY id DESC").fetchall()
+        result = []
+        for r in rows:
+            pos = dict(r)
+            cmp = pos["current_price"] or pos["buy_price"]
+            pos["current_pnl"]     = round((cmp - pos["buy_price"]) * pos["quantity"], 2)
+            pos["current_pnl_pct"] = round(((cmp - pos["buy_price"]) / pos["buy_price"]) * 100, 2)
+            pos["current_value"]   = round(cmp * pos["quantity"], 2)
+            # Effective SL: use trailing SL if trailing is active, otherwise original SL
+            pos["effective_sl"]    = pos["trailing_sl"] if pos["trailing_active"] else pos["stop_loss"]
+            result.append(pos)
+        return result
+
+
+def get_p2_trades(limit: int = 50) -> List[Dict[str, Any]]:
+    """Returns Portfolio 2 trade history."""
+    with get_db() as conn:
+        rows = conn.execute("SELECT * FROM p2_trades ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_p2_watchlist(limit: int = 50) -> List[Dict[str, Any]]:
+    """Returns Portfolio 2 Wyckoff watchlist (all statuses)."""
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT * FROM p2_watchlist ORDER BY wyckoff_score DESC LIMIT ?", (limit,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def upsert_p2_watchlist(items: List[Dict[str, Any]]) -> int:
+    """
+    Inserts or updates Portfolio 2 Wyckoff watchlist items.
+    Matches on symbol; updates the score metrics if the stock is already present.
+    Returns number of newly inserted rows.
+    """
+    added = 0
+    with get_db() as conn:
+        cursor = conn.cursor()
+        for item in items:
+            sym = item.get("symbol", "")
+            if not sym:
+                continue
+            existing = cursor.execute(
+                "SELECT id FROM p2_watchlist WHERE symbol = ? ORDER BY id DESC LIMIT 1", (sym,)
+            ).fetchone()
+            if existing:
+                cursor.execute("""
+                    UPDATE p2_watchlist SET
+                        report_date = ?, cmp_report = ?, wyckoff_score = ?, phase_label = ?,
+                        support = ?, resistance = ?, range_width_pct = ?,
+                        absorption_score = ?, demand_score = ?,
+                        spring_detected = ?, spring_low = ?, sos_detected = ?, sos_candle_date = ?,
+                        avg_volume_20d = ?, ema_10 = ?,
+                        entry_price = ?, suggested_stop_loss = ?, sl_pct = ?,
+                        suggested_target = ?, target_pct = ?,
+                        status = CASE WHEN status IN ('EXPIRED','TRIGGERED') THEN status ELSE 'PENDING' END
+                    WHERE symbol = ?
+                """, (
+                    item.get("report_date", ""), item.get("cmp", 0.0),
+                    item.get("wyckoff_score", 0.0), item.get("phase_label", ""),
+                    item.get("support", 0.0), item.get("resistance", 0.0), item.get("range_width_pct", 0.0),
+                    item.get("absorption_score", 0.0), item.get("demand_score", 0.0),
+                    1 if item.get("spring_detected") else 0, item.get("spring_low", 0.0),
+                    1 if item.get("sos_detected") else 0, item.get("sos_candle_date", ""),
+                    item.get("avg_volume_20d", 0.0), item.get("ema_10", 0.0),
+                    item.get("entry_price", 0.0), item.get("stop_loss", 0.0), item.get("sl_pct", 0.0),
+                    item.get("target_price", 0.0), item.get("target_pct", 0.0),
+                    sym
+                ))
+            else:
+                cursor.execute("""
+                    INSERT INTO p2_watchlist (
+                        report_date, stock_name, symbol, cmp_report,
+                        wyckoff_score, phase_label, support, resistance, range_width_pct,
+                        absorption_score, demand_score,
+                        spring_detected, spring_low, sos_detected, sos_candle_date,
+                        avg_volume_20d, ema_10,
+                        entry_price, suggested_stop_loss, sl_pct, suggested_target, target_pct,
+                        status
+                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'PENDING')
+                """, (
+                    item.get("report_date", ""), item.get("stock_name", sym), sym,
+                    item.get("cmp", 0.0),
+                    item.get("wyckoff_score", 0.0), item.get("phase_label", ""),
+                    item.get("support", 0.0), item.get("resistance", 0.0), item.get("range_width_pct", 0.0),
+                    item.get("absorption_score", 0.0), item.get("demand_score", 0.0),
+                    1 if item.get("spring_detected") else 0, item.get("spring_low", 0.0),
+                    1 if item.get("sos_detected") else 0, item.get("sos_candle_date", ""),
+                    item.get("avg_volume_20d", 0.0), item.get("ema_10", 0.0),
+                    item.get("entry_price", 0.0), item.get("stop_loss", 0.0), item.get("sl_pct", 0.0),
+                    item.get("target_price", 0.0), item.get("target_pct", 0.0),
+                ))
+                added += 1
+        conn.commit()
+    return added
+
+
+def increment_p2_session_counters() -> int:
+    """
+    Increments sessions_held for all open Portfolio 2 positions by 1.
+    Should be called once per trading day (e.g. at market close).
+    Returns the count of positions updated.
+    """
+    with get_db() as conn:
+        cursor = conn.execute(
+            "UPDATE p2_positions SET sessions_held = sessions_held + 1 WHERE status = 'OPEN'"
+        )
+        conn.commit()
+        return cursor.rowcount
+
+
+def export_p2_snapshot(export_path=None) -> Dict[str, Any]:
+    """Exports a combined Portfolio 1 + Portfolio 2 snapshot for the dashboard."""
+    from pathlib import Path
+    from .config import BASE_DIR
+    from datetime import datetime
+
+    p2_summary   = get_p2_portfolio_summary()
+    p2_positions = get_p2_open_positions()
+    p2_trades    = get_p2_trades(limit=100)
+    p2_watchlist = get_p2_watchlist(limit=50)
+
+    snapshot = {
+        "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S IST"),
+        "date":         datetime.now().strftime("%Y-%m-%d"),
+        "portfolio2": {
+            **p2_summary,
+        },
+        "p2_positions":  p2_positions,
+        "p2_trades":     p2_trades,
+        "p2_watchlist":  p2_watchlist,
+    }
+
+    target_paths = [
+        BASE_DIR / "data" / "p2_snapshot.json",
+        BASE_DIR / "portfolio_snapshot.json",   # merged into main snapshot below
+    ]
+    if export_path:
+        target_paths.append(Path(export_path))
+
+    # Write dedicated P2 snapshot
+    for p in [BASE_DIR / "data" / "p2_snapshot.json"]:
+        try:
+            p.parent.mkdir(parents=True, exist_ok=True)
+            import json
+            with open(p, "w", encoding="utf-8") as f:
+                json.dump(snapshot, f, indent=2)
+        except Exception as e:
+            print(f"Warning writing p2 snapshot to {p}: {e}")
+
+    return snapshot
