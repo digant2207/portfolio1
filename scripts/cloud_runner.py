@@ -24,7 +24,7 @@ from backend.notifier import send_daily_email_report
 
 def main():
     parser = argparse.ArgumentParser(description="Paper Trading Cloud Runner")
-    parser.add_argument("--task", choices=["fetch-sheets", "fetch-mail", "trade-cycle", "daily-report", "evening-report", "evening-watchlist", "export-snapshot"], required=True, help="Task to execute")
+    parser.add_argument("--task", choices=["fetch-sheets", "fetch-mail", "trade-cycle", "daily-report", "evening-report", "evening-watchlist", "export-snapshot", "wyckoff-scan"], required=True, help="Task to execute")
     args = parser.parse_args()
 
     init_db()
@@ -65,12 +65,54 @@ def main():
             print(f"[i] Daily 6:30 PM report for {today_str} already sent today. Skipping duplicate.")
         else:
             success, msg = send_daily_email_report()
-            print(f"Result: {msg}")
             if success:
                 record_notification_sent(today_str, "DAILY_REPORT_630", msg)
-            if not success:
+            else:
                 sys.exit(1)
         export_portfolio_snapshot()
+
+    elif args.task == "wyckoff-scan":
+        print("[*] Executing Cloud Task: wyckoff-scan (Wyckoff + VSA Swing Screener)")
+        from backend.wyckoff_analyzer import analyze_stock, result_to_dict
+        from backend.database import get_all_watchlist, upsert_p2_watchlist, export_p2_snapshot
+        from backend.notifier import notify_p2_scan_results
+        from datetime import datetime
+
+        wl = get_all_watchlist(limit=100)
+        symbols = [w["symbol"] for w in wl if w.get("symbol")]
+        if not symbols:
+            symbols = [
+                "RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "ICICIBANK.NS",
+                "SBIN.NS", "BHARTIARTL.NS", "TATAMOTORS.NS", "LT.NS", "ITC.NS"
+            ]
+
+        seen = set()
+        unique = [s for s in symbols if not (s in seen or seen.add(s))]
+        print(f"[i] Scanning {len(unique)} candidate symbols...")
+        results, passed = [], []
+        today = datetime.now().strftime("%Y-%m-%d")
+
+        for sym in unique:
+            try:
+                r = analyze_stock(sym)
+                d = result_to_dict(r)
+                d["report_date"] = today
+                results.append(d)
+                if r.passed:
+                    passed.append(d)
+                    print(f"  [+] PASSED: {sym} (Score: {d['wyckoff_score']}, Phase: {d['phase_label']})")
+            except Exception as e:
+                print(f"  [!] Error scanning {sym}: {e}")
+
+        if passed:
+            upsert_p2_watchlist(passed)
+        export_p2_snapshot()
+        export_portfolio_snapshot()
+        try:
+            notify_p2_scan_results(results)
+        except Exception as e:
+            print(f"[!] Notification warning: {e}")
+        print(f"Result: Scanned {len(results)} stocks. {len(passed)} passed Wyckoff screening (score >= 60).")
 
 if __name__ == "__main__":
     main()

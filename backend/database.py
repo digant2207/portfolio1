@@ -821,7 +821,15 @@ def export_portfolio_snapshot(export_path: Optional[str] = None) -> Dict[str, An
         "all_trades": all_trades,
         "upcoming_trades": upcoming
     }
-    
+
+    try:
+        snapshot["portfolio2"]   = get_p2_portfolio_summary()
+        snapshot["p2_positions"] = get_p2_open_positions()
+        snapshot["p2_trades"]    = get_p2_trades(limit=100)
+        snapshot["p2_watchlist"] = get_p2_watchlist(limit=50)
+    except Exception as err:
+        print(f"Warning adding P2 to main snapshot: {err}")
+
     target_paths = [
         BASE_DIR / "data" / "portfolio_snapshot.json",
         BASE_DIR / "frontend" / "portfolio_snapshot.json",
@@ -1018,13 +1026,14 @@ def export_p2_snapshot(export_path=None) -> Dict[str, Any]:
 
     target_paths = [
         BASE_DIR / "data" / "p2_snapshot.json",
-        BASE_DIR / "portfolio_snapshot.json",   # merged into main snapshot below
+        BASE_DIR / "p2_snapshot.json",
+        BASE_DIR / "frontend" / "p2_snapshot.json",
     ]
     if export_path:
         target_paths.append(Path(export_path))
 
     # Write dedicated P2 snapshot
-    for p in [BASE_DIR / "data" / "p2_snapshot.json"]:
+    for p in target_paths:
         try:
             p.parent.mkdir(parents=True, exist_ok=True)
             import json

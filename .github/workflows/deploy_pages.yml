@@ -10,6 +10,8 @@ on:
       - 'app.js'
       - 'data/portfolio_snapshot.json'
       - 'portfolio_snapshot.json'
+      - 'data/p2_snapshot.json'
+      - 'p2_snapshot.json'
       - 'frontend/**'
   workflow_dispatch:
 

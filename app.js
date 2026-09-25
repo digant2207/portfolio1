@@ -1309,11 +1309,19 @@ function switchPortfolio(portfolioNum) {
         // Activate first P2 tab
         switchP2Tab("tab-p2-watchlist");
 
-        // Update metrics for Portfolio 2
+        // Update metrics & tables for Portfolio 2 immediately
         renderP2Metrics();
+        renderP2Watchlist();
+        renderP2Positions();
+        renderP2Trades();
+        updateP2Badges();
 
-        // Load P2 data
-        if (appState.isLiveBackend) loadP2Data();
+        // Load fresh P2 data
+        if (appState.isLiveBackend) {
+            loadP2Data();
+        } else if (!appState.p2Watchlist || appState.p2Watchlist.length === 0) {
+            loadP2SnapshotFallback();
+        }
     } else {
         // Activate P1
         btnP1 && btnP1.classList.add("active");
@@ -1354,10 +1362,38 @@ function switchP2Tab(tabId) {
 // PORTFOLIO 2 DATA LOADER
 // ============================================================================
 
+async function loadP2SnapshotFallback() {
+    const p2SnapPaths = [
+        "./data/p2_snapshot.json",
+        "./p2_snapshot.json",
+        "./frontend/p2_snapshot.json",
+        "https://raw.githubusercontent.com/digant2207/portfolio1/main/data/p2_snapshot.json"
+    ];
+    for (const p of p2SnapPaths) {
+        try {
+            const r2 = await fetch(`${p}?t=${Date.now()}`);
+            if (r2.ok) {
+                const p2snap = await r2.json();
+                if (p2snap.portfolio2)   appState.p2Portfolio  = p2snap.portfolio2;
+                if (p2snap.p2_positions) appState.p2Positions  = p2snap.p2_positions;
+                if (p2snap.p2_trades)    appState.p2Trades     = p2snap.p2_trades;
+                if (p2snap.p2_watchlist) appState.p2Watchlist  = p2snap.p2_watchlist;
+                renderP2Metrics();
+                renderP2Watchlist();
+                renderP2Positions();
+                renderP2Trades();
+                updateP2Badges();
+                return true;
+            }
+        } catch (_) {}
+    }
+    return false;
+}
+
 async function loadP2Data() {
     try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
         const [portRes, posRes, trRes, wlRes] = await Promise.all([
             fetch(`${API_BASE}/api/p2/portfolio`,  { signal: controller.signal }).then(r => r.json()),
             fetch(`${API_BASE}/api/p2/positions`,  { signal: controller.signal }).then(r => r.json()),
@@ -1375,18 +1411,35 @@ async function loadP2Data() {
         renderP2Trades();
         updateP2Badges();
     } catch (e) {
-        console.warn("P2 data load error:", e);
+        console.warn("P2 live API load error, falling back to snapshot:", e);
+        await loadP2SnapshotFallback();
     }
 }
 
 async function runWyckoffScan() {
     const btn = document.getElementById("btn-p2-scan");
-    if (btn) { btn.disabled = true; btn.textContent = "\ud83d\udd04 Scanning..."; }
+    if (btn) { btn.disabled = true; btn.textContent = "⏳ Scanning Wyckoff..."; }
+
+    // Check if live Python backend is running
+    if (!appState.isLiveBackend) {
+        showToast("Static Dashboard: Live scans require the local Python server (run start_trading_terminal.bat) or GitHub Actions. Loaded latest saved scan results.", "warning");
+        await loadP2SnapshotFallback();
+        if (btn) { btn.disabled = false; btn.textContent = "🔍 Run Wyckoff Scan"; }
+        return;
+    }
+
     try {
-        const res = await fetch(`${API_BASE}/api/p2/actions/scan`, { method: "POST" });
+        const res = await fetch(`${API_BASE}/api/p2/actions/scan`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({})
+        });
+        if (!res.ok) {
+            throw new Error(`Server returned HTTP ${res.status}`);
+        }
         const data = await res.json();
         if (data.success) {
-            showToast(`\u2705 ${data.message}`, "success");
+            showToast(`✅ ${data.message}`, "success");
             await loadP2Data();
         } else {
             showToast(data.message || "Scan failed", "error");
@@ -1394,7 +1447,7 @@ async function runWyckoffScan() {
     } catch (e) {
         showToast(`Scan error: ${e.message}`, "error");
     } finally {
-        if (btn) { btn.disabled = false; btn.textContent = "\ud83d\udd0d Run Wyckoff Scan"; }
+        if (btn) { btn.disabled = false; btn.textContent = "🔍 Run Wyckoff Scan"; }
     }
 }
 

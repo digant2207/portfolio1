@@ -312,8 +312,12 @@ def api_p2_watchlist(limit: int = 50):
     return get_p2_watchlist(limit=limit)
 
 
+class P2ScanRequest(BaseModel):
+    symbols: Optional[List[str]] = None
+
+
 @app.post("/api/p2/actions/scan")
-def api_p2_scan(symbols: Optional[List[str]] = Body(None)):
+def api_p2_scan(payload: Optional[P2ScanRequest] = None):
     """
     Runs the Wyckoff + VSA screener on the provided list of NSE symbols.
     If no symbols are provided, scans the current Portfolio 1 watchlist symbols.
@@ -322,25 +326,42 @@ def api_p2_scan(symbols: Optional[List[str]] = Body(None)):
     from .wyckoff_analyzer import analyze_stock, result_to_dict
     from datetime import datetime
 
+    symbols = payload.symbols if (payload and payload.symbols) else None
+
     if not symbols:
         # Fall back to Portfolio 1 watchlist symbols
         wl = get_all_watchlist(limit=100)
-        symbols = list({w["symbol"] for w in wl if w.get("symbol")})
+        symbols = [w["symbol"] for w in wl if w.get("symbol")]
 
     if not symbols:
-        return {"success": False, "message": "No symbols to scan.", "results": []}
+        # Fall back to top liquid NSE stocks if watchlist is empty
+        symbols = [
+            "RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "ICICIBANK.NS",
+            "SBIN.NS", "BHARTIARTL.NS", "TATAMOTORS.NS", "LT.NS", "ITC.NS"
+        ]
+
+    # Remove duplicates while preserving order
+    unique_symbols = []
+    seen = set()
+    for s in symbols:
+        if s and s not in seen:
+            seen.add(s)
+            unique_symbols.append(s)
 
     results = []
     passed  = []
     today   = datetime.now().strftime("%Y-%m-%d")
 
-    for sym in symbols:
-        r = analyze_stock(sym)
-        d = result_to_dict(r)
-        d["report_date"] = today
-        results.append(d)
-        if r.passed:
-            passed.append(d)
+    for sym in unique_symbols:
+        try:
+            r = analyze_stock(sym)
+            d = result_to_dict(r)
+            d["report_date"] = today
+            results.append(d)
+            if r.passed:
+                passed.append(d)
+        except Exception as err:
+            print(f"[!] Wyckoff scan error for {sym}: {err}")
 
     # Upsert passing stocks into P2 watchlist
     if passed:
@@ -349,11 +370,11 @@ def api_p2_scan(symbols: Optional[List[str]] = Body(None)):
 
     results.sort(key=lambda x: x["wyckoff_score"], reverse=True)
     return {
-        "success":      True,
+        "success":       True,
         "total_scanned": len(results),
         "total_passed":  len(passed),
-        "message":      f"Scanned {len(results)} stocks. {len(passed)} passed Wyckoff screening (score >= 60).",
-        "results":      results,
+        "message":       f"Scanned {len(results)} stocks. {len(passed)} passed Wyckoff screening (score >= 60).",
+        "results":       results,
     }
 
 
