@@ -12,6 +12,7 @@ from .config import load_config
 from .database import (
     get_portfolio_summary, get_open_positions, get_trades,
     get_pending_watchlist, get_nearest_breakout_candidates, log_event, get_db,
+    is_notification_sent, record_notification_sent,
     # Portfolio 2
     get_p2_portfolio_summary, get_p2_open_positions, get_p2_watchlist,
 )
@@ -468,9 +469,14 @@ def send_telegram_message(text: str, parse_mode: str = "HTML") -> Tuple[bool, st
         return False, err
 
 def notify_trade_buy(trade: Dict[str, Any]):
-    """Dispatches a Telegram alert for a newly executed BUY order."""
-    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    """Dispatches a Telegram alert for a newly executed BUY order (deduplicated per symbol per day)."""
+    today_str = datetime.now().strftime("%Y-%m-%d")
     sym = trade.get("symbol", "")
+    notif_key = f"P1_BUY_{sym}"
+    if is_notification_sent(today_str, notif_key):
+        return
+
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     name = trade.get("stock_name", sym)
     section = trade.get("section", "above_200_dma")
     section_label = "Above 200 DMA" if section == "above_200_dma" else "Below 200 DMA"
@@ -494,7 +500,9 @@ def notify_trade_buy(trade: Dict[str, Any]):
         f"━━━━━━━━━━━━━━━━━━\n"
         f"<i>Strategy: 200 DMA + 1% Breakout</i>"
     )
-    send_telegram_message(msg)
+    ok, _ = send_telegram_message(msg)
+    if ok:
+        record_notification_sent(today_str, notif_key, f"P1 Buy {sym}")
 
 def notify_trade_sell(trade: Dict[str, Any]):
     """Dispatches a Telegram alert for an exit (Target Hit, Stop Loss Hit, or Manual)."""
@@ -721,9 +729,15 @@ def notify_p2_buy(trade: Dict[str, Any]):
     """
     Sends a Telegram alert when a Portfolio 2 Wyckoff swing BUY is executed.
     Tagged clearly as [PORTFOLIO 2 – WYCKOFF SWING] so it's distinct from P1.
+    Deduplicated: Never sends duplicate buy alert for the same stock on the same day.
     """
-    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    today_str = datetime.now().strftime("%Y-%m-%d")
     sym     = trade.get("symbol", "")
+    notif_key = f"P2_BUY_{sym}"
+    if is_notification_sent(today_str, notif_key):
+        return
+
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     name    = trade.get("stock_name", sym)
     price   = trade.get("buy_price") or trade.get("price", 0.0)
     qty     = trade.get("quantity", 0)
@@ -750,7 +764,9 @@ def notify_p2_buy(trade: Dict[str, Any]):
         f"━━━━━━━━━━━━━━━━━━\n"
         f"<i>Trailing stop activates at +5% | Time-stop after 10 sessions</i>"
     )
-    send_telegram_message(msg)
+    ok, _ = send_telegram_message(msg)
+    if ok:
+        record_notification_sent(today_str, notif_key, f"P2 Buy {sym}")
 
 
 def notify_p2_sell(trade: Dict[str, Any]):
@@ -858,6 +874,73 @@ def notify_p2_scan_results(results: List[Dict[str, Any]]):
     lines.append("\n━━━━━━━━━━━━━━━━━━")
     lines.append("<i>Positions added to P2 Watchlist in the dashboard.</i>")
     send_telegram_message("\n".join(lines))
+
+
+def send_evening_p2_wyckoff_top10(force: bool = False) -> Tuple[bool, str]:
+    """
+    Sends the single, high-conviction daily evening Telegram digest of the
+    TOP 10 Wyckoff screened swing candidates.
+    Fires ONCE per evening (deduplicated via sent_notifications).
+    """
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    notif_key = "EVENING_WYCKOFF_TOP10"
+
+    if not force and is_notification_sent(today_str, notif_key):
+        return True, f"Top 10 Wyckoff evening message already sent for {today_str}."
+
+    candidates = get_p2_watchlist(limit=50)
+    top10 = [c for c in candidates if c.get("wyckoff_score", 0) >= 60][:10]
+    if not top10:
+        top10 = candidates[:10]
+
+    if not top10:
+        return False, "No Wyckoff candidates available in watchlist."
+
+    phase_icon = {
+        "PHASE_D_MARKUP":       "🚀",
+        "PHASE_C_SPRING":       "🌱",
+        "PHASE_B_ACCUMULATION": "🏗",
+        "PHASE_A_STOPPING":     "⏸",
+        "UNCERTAIN":            "❓",
+    }
+
+    lines = [
+        "🌊 <b>[PORTFOLIO 2 – TOP 10 WYCKOFF SWING CANDIDATES]</b>",
+        "━━━━━━━━━━━━━━━━━━━━━━",
+        f"📅 <b>Date:</b> {today_str} (Evening Watchlist)",
+        "<i>High-conviction swing setups (5–10 sessions). Review & confirm before buying.</i>\n",
+    ]
+
+    for idx, c in enumerate(top10, 1):
+        sym    = html.escape(c.get("symbol", ""))
+        name   = html.escape(c.get("stock_name") or sym)
+        score  = c.get("wyckoff_score", 0.0)
+        phase  = c.get("phase_label", "UNKNOWN")
+        icon   = phase_icon.get(phase, "📈")
+        entry  = c.get("entry_price") or c.get("cmp_report", 0.0)
+        sl     = c.get("suggested_stop_loss", 0.0)
+        tgt    = c.get("suggested_target", 0.0)
+        sl_pct = c.get("sl_pct", 0.0)
+        tg_pct = c.get("target_pct", 0.0)
+        spring = "✅ Spring" if c.get("spring_detected") else ""
+        sos    = "✅ SOS" if c.get("sos_detected") else ""
+        signals = " | ".join(filter(None, [spring, sos])) or "Consolidation"
+
+        lines.append(
+            f"<b>{idx}. <code>{sym}</code></b> ({name})\n"
+            f"   {icon} <b>Score:</b> {score:.0f}/100 | {phase.replace('_',' ')} | {signals}\n"
+            f"   💵 <b>Entry CMP:</b> ₹{entry:,.2f}\n"
+            f"   🛑 <b>SL:</b> ₹{sl:,.2f} (–{sl_pct:.1f}%) | 🎯 <b>Target:</b> ₹{tgt:,.2f} (+{tg_pct:.0f}%)\n"
+        )
+
+    lines.append("━━━━━━━━━━━━━━━━━━━━━━")
+    lines.append("🛡️ <i>Rule: Capital preservation first. Never buy without manual confirmation.</i>")
+
+    msg = "\n".join(lines)
+    success, res = send_telegram_message(msg)
+    if success:
+        record_notification_sent(today_str, notif_key, f"Sent top {len(top10)} candidates")
+    return success, res
 
 
 def _build_p2_report_section(

@@ -66,8 +66,8 @@ jobs:
           echo "Manual Input: $MANUAL_INPUT"
 
           if [ "$MANUAL_INPUT" == "daily-report" ] || [ "$MANUAL_INPUT" == "evening-watchlist" ]; then
-            python scripts/cloud_runner.py --task daily-report
             python scripts/cloud_runner.py --task wyckoff-scan
+            python scripts/cloud_runner.py --task daily-report
           elif [ "$MANUAL_INPUT" == "fetch-sheets" ] || [ "$MANUAL_INPUT" == "fetch-mail" ]; then
             python scripts/cloud_runner.py --task fetch-sheets
           elif [ "$MANUAL_INPUT" == "trade-cycle" ]; then
@@ -78,9 +78,9 @@ jobs:
             # Automated Schedule logic
             # 1. 18:30 IST Window -> Comprehensive Daily Report & Wyckoff Scan
             if [ "$CURRENT_HOUR" -eq 18 ] && [ "$CURRENT_MIN" -ge 25 ]; then
-              echo "[+] Triggering Daily 6:30 PM Report & Wyckoff Screener..."
-              python scripts/cloud_runner.py --task daily-report
+              echo "[+] Triggering Wyckoff Screener & Daily 6:30 PM Report..."
               python scripts/cloud_runner.py --task wyckoff-scan
+              python scripts/cloud_runner.py --task daily-report
             elif [ "$CURRENT_HOUR" -ge 17 ] && [ "$CURRENT_HOUR" -le 18 ]; then
               # Evening Sheet Fetch before 18:30 (17:00 - 18:24 IST)
               echo "[+] Triggering Evening Google Sheets Watchlist Fetch & Wyckoff Scan..."

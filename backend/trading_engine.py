@@ -666,12 +666,13 @@ def manual_close_p2_position(position_id: int) -> bool:
         return not res.get("already_closed") and "error" not in res
 
 
-def run_p2_trading_cycle(force_market_open: bool = False, max_positions: int = 5, position_size: float = 20000.0) -> Dict[str, Any]:
+def run_p2_trading_cycle(force_market_open: bool = False, max_positions: int = 5, position_size: float = 20000.0, auto_buy: bool = False) -> Dict[str, Any]:
     """
-    Executes a complete Portfolio 2 Wyckoff Swing Delivery cycle:
+    Executes a Portfolio 2 Wyckoff Swing Delivery cycle:
     1. Checks exits on active open positions (Target, Stop-Loss, Trailing Stop, Time-Stop).
     2. Updates Trailing Stop triggers for winning positions (+5% profit activates breakeven/trail).
-    3. Fills empty slots (up to 5 positions) with highest-ranked Wyckoff candidates.
+    3. If auto_buy is True (default False), fills empty slots with confirmed candidates.
+       RULE: By default, never buys in Portfolio 2 without explicit user confirmation!
     4. Updates database, snapshots, and alerts.
     """
     if not force_market_open and not is_market_open():
@@ -719,7 +720,7 @@ def run_p2_trading_cycle(force_market_open: bool = False, max_positions: int = 5
                     "UPDATE p2_positions SET trailing_active = 1, trailing_sl = ? WHERE id = ?",
                     (trailing_sl, pos["id"])
                 )
-                log_event("TRADE", f"🌊 [P2 TRAILING ACTIVE] {sym} reached +{gain_pct:.1f}%! Stop-Loss moved to breakeven ₹{trailing_sl:.2f}")
+                log_event("TRADE", f"🌊 [P2 TRAILING ACTIVE] {sym} reached +{gain_pct:.1f}%! Stop-Loss moved to breakeven ₹{trailing_sl:.2f}", conn=conn)
 
             # Advance Trailing Stop if CMP moves higher (+8% or more)
             if trailing_active and gain_pct >= 8.0:
@@ -727,7 +728,7 @@ def run_p2_trading_cycle(force_market_open: bool = False, max_positions: int = 5
                 if trail_candidate > trailing_sl:
                     trailing_sl = trail_candidate
                     conn.execute("UPDATE p2_positions SET trailing_sl = ? WHERE id = ?", (trailing_sl, pos["id"]))
-                    log_event("TRADE", f"🌊 [P2 TRAIL UPDATED] {sym} trailing SL raised to ₹{trailing_sl:.2f}")
+                    log_event("TRADE", f"🌊 [P2 TRAIL UPDATED] {sym} trailing SL raised to ₹{trailing_sl:.2f}", conn=conn)
 
             effective_sl = trailing_sl if trailing_active else stop_loss
 
@@ -752,11 +753,11 @@ def run_p2_trading_cycle(force_market_open: bool = False, max_positions: int = 5
 
         conn.commit()
 
-        # 2. Check for New Buys if slots are available (< max_positions)
+        # 2. Check for New Buys ONLY if auto_buy is explicitly True (User Confirmation Rule)
         current_open_count = conn.execute("SELECT COUNT(*) FROM p2_positions WHERE status = 'OPEN'").fetchone()[0]
         slots_available = max_positions - current_open_count
 
-        if slots_available > 0:
+        if auto_buy and slots_available > 0:
             # Fetch highest scoring Wyckoff candidates that are still PENDING
             candidates = conn.execute("""
                 SELECT * FROM p2_watchlist
@@ -797,3 +798,27 @@ def run_p2_trading_cycle(force_market_open: bool = False, max_positions: int = 5
         "message": f"Portfolio 2 cycle complete: {len(buys)} buys, {len(targets_hit)} targets, {len(stop_losses_hit)} exits."
     }
     return summary
+
+
+def execute_p2_buy_confirmed(symbol: str, position_size: float = 20000.0) -> Optional[Dict[str, Any]]:
+    """
+    Executes a buy for a specific Wyckoff candidate AFTER explicit user confirmation.
+    Returns the trade dictionary if successful, or None with log.
+    """
+    with get_db() as conn:
+        cand_row = conn.execute(
+            "SELECT * FROM p2_watchlist WHERE symbol = ? AND status = 'PENDING' ORDER BY id DESC LIMIT 1",
+            (symbol,)
+        ).fetchone()
+        if not cand_row:
+            log_event("WARNING", f"Cannot execute confirmed buy: {symbol} not found in PENDING p2_watchlist.")
+            return None
+
+        cand = dict(cand_row)
+        quotes = fetch_current_prices([symbol])
+        cmp = quotes.get(symbol) or cand.get("cmp_report") or cand.get("entry_price")
+        trade = execute_p2_buy(cand, cmp, conn=conn, position_size=position_size)
+        if trade:
+            export_p2_snapshot()
+            export_portfolio_snapshot()
+        return trade

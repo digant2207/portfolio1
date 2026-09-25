@@ -472,10 +472,11 @@
                                     <th>Stop-Loss</th>
                                     <th>Target</th>
                                     <th>Status</th>
+                                    <th>Action</th>
                                 </tr>
                             </thead>
                             <tbody id="p2-watchlist-table-body">
-                                <tr><td colspan="11" class="table-empty">Run Wyckoff Scan to populate candidates.</td></tr>
+                                <tr><td colspan="12" class="table-empty">Run Wyckoff Scan to populate candidates.</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -705,6 +706,56 @@
                     <div class="modal-footer">
                         <button type="button" class="btn btn-outline" id="btn-cancel-sim-price">Cancel</button>
                         <button type="submit" class="btn btn-primary">Apply Test Price</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirm Portfolio 2 Buy Modal -->
+    <div class="modal-overlay" id="modal-p2-confirm-buy">
+        <div class="modal-content modal-md">
+            <div class="modal-header">
+                <h3>🛡️ Confirm Portfolio 2 Buy Order</h3>
+                <button class="modal-close" id="btn-close-p2-buy">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+                    <div style="font-weight: 600; color: #10b981; margin-bottom: 4px;">🛡️ Capital Preservation First</div>
+                    <div style="font-size: 13px; color: #cbd5e1;">Portfolio 2 never buys stocks automatically. Money left in cash is 100% safe. Confirm only if you approve this trade.</div>
+                </div>
+                <form id="p2-buy-form">
+                    <div class="form-group">
+                        <label>Stock Symbol</label>
+                        <input type="text" id="p2-buy-symbol" readonly style="font-weight: 700; color: #38bdf8;">
+                        <div id="p2-buy-name" style="font-size: 12px; color: #94a3b8; margin-top: 2px;"></div>
+                    </div>
+                    <div class="form-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label>Current Market Price (₹)</label>
+                            <input type="text" id="p2-buy-price" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label>Position Allocation (₹)</label>
+                            <input type="number" id="p2-buy-amount" value="20000" step="1000" min="1000" max="100000">
+                        </div>
+                    </div>
+                    <div class="form-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label>Suggested Stop-Loss</label>
+                            <input type="text" id="p2-buy-sl" readonly style="color: var(--danger);">
+                        </div>
+                        <div class="form-group">
+                            <label>Suggested Target</label>
+                            <input type="text" id="p2-buy-tgt" readonly style="color: var(--success);">
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-top: 8px; padding: 10px; background: rgba(15, 23, 42, 0.6); border-radius: 6px;">
+                        <div style="font-size: 13px; color: #f8fafc;" id="p2-buy-calc-summary">Estimated: ~0 shares</div>
+                    </div>
+                    <div class="modal-footer" style="margin-top: 16px;">
+                        <button type="button" class="btn btn-outline" id="btn-cancel-p2-buy">Cancel (Keep Cash)</button>
+                        <button type="submit" class="btn btn-primary" id="btn-submit-p2-buy">✅ Confirm &amp; Execute Buy</button>
                     </div>
                 </form>
             </div>

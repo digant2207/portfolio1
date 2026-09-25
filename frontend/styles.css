@@ -1324,3 +1324,155 @@ input:focus, select:focus, textarea:focus {
         grid-template-columns: 1fr 1fr;
     }
 }
+
+/* ==========================================================================
+   PORTFOLIO 1 <-> PORTFOLIO 2 TOGGLE
+   ========================================================================== */
+
+.portfolio-toggle-group {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    background: var(--bg-card);
+    border: 1px solid var(--border-highlight);
+    border-radius: var(--radius-full);
+    padding: 3px;
+    flex-shrink: 0;
+    box-shadow: 0 0 0 1px rgba(56,189,248,0.08), inset 0 1px 0 rgba(255,255,255,0.04);
+}
+
+.portfolio-toggle-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border: none;
+    border-radius: var(--radius-full);
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-family: var(--font-sans);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    transition: all 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+    white-space: nowrap;
+    position: relative;
+}
+
+.portfolio-toggle-btn:hover {
+    color: var(--text-secondary);
+    background: rgba(56,189,248,0.06);
+}
+
+.portfolio-toggle-btn.active {
+    background: linear-gradient(135deg, rgba(56,189,248,0.2) 0%, rgba(0,242,254,0.12) 100%);
+    color: var(--cyan-neon);
+    box-shadow: 0 0 12px rgba(0,242,254,0.18), inset 0 1px 0 rgba(0,242,254,0.12);
+    border: 1px solid rgba(0,242,254,0.25);
+}
+
+/* Portfolio 2 active gets a purple/teal Wyckoff tint */
+#btn-p2.active {
+    background: linear-gradient(135deg, rgba(168,85,247,0.18) 0%, rgba(56,189,248,0.12) 100%);
+    color: #c4b5fd;
+    box-shadow: 0 0 12px rgba(168,85,247,0.2), inset 0 1px 0 rgba(168,85,247,0.12);
+    border: 1px solid rgba(168,85,247,0.28);
+}
+
+.portfolio-toggle-divider {
+    width: 1px;
+    height: 18px;
+    background: var(--border-highlight);
+    flex-shrink: 0;
+    margin: 0 2px;
+}
+
+.ptb-icon {
+    font-size: 14px;
+    line-height: 1;
+}
+
+.ptb-label {
+    display: flex;
+    flex-direction: column;
+    line-height: 1;
+}
+
+.ptb-sub {
+    font-size: 9px;
+    font-weight: 400;
+    opacity: 0.7;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+/* P2 Strategy Badge (shown inside section headings) */
+.p2-strategy-badge {
+    display: inline-block;
+    margin-left: 10px;
+    padding: 2px 10px;
+    border-radius: var(--radius-full);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    background: linear-gradient(135deg, rgba(168,85,247,0.2) 0%, rgba(56,189,248,0.12) 100%);
+    color: #c4b5fd;
+    border: 1px solid rgba(168,85,247,0.3);
+    vertical-align: middle;
+}
+
+/* Wyckoff score badge helpers */
+.badge-yes {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--success);
+}
+
+.badge-no {
+    display: inline-block;
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+/* Wyckoff slot dot (purple tint for P2 filled slots) */
+.slot-dot.wyckoff {
+    background: linear-gradient(135deg, #a855f7, #38bdf8);
+    box-shadow: 0 0 6px rgba(168,85,247,0.6);
+}
+
+/* Responsive: hide ptb-sub on very small screens */
+@media (max-width: 520px) {
+    .ptb-sub { display: none; }
+    .portfolio-toggle-btn { padding: 6px 10px; }
+}
+
+/* Portfolio 2 Confirm Buy Button */
+.p2-confirm-buy-btn {
+    background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+    color: #ffffff;
+    border: 1px solid rgba(16, 185, 129, 0.4);
+    font-weight: 600;
+    padding: 5px 12px;
+    font-size: 11px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.p2-confirm-buy-btn:hover {
+    background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
+    box-shadow: 0 0 12px rgba(16, 185, 129, 0.4);
+    transform: translateY(-1px);
+}
+
+.p2-confirm-buy-btn:active {
+    transform: translateY(0);
+}
+

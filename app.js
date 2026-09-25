@@ -1284,6 +1284,93 @@ function initPortfolioToggle() {
     document.querySelectorAll("#p2-tab-nav .tab-link").forEach(tab => {
         tab.addEventListener("click", () => switchP2Tab(tab.getAttribute("data-tab")));
     });
+
+    // P2 Buy Confirmation Modal controls
+    document.getElementById("btn-close-p2-buy")?.addEventListener("click", closeP2BuyModal);
+    document.getElementById("btn-cancel-p2-buy")?.addEventListener("click", closeP2BuyModal);
+
+    const amountInput = document.getElementById("p2-buy-amount");
+    if (amountInput) {
+        amountInput.addEventListener("input", updateP2BuySummary);
+    }
+
+    document.getElementById("p2-buy-form")?.addEventListener("submit", submitP2BuyForm);
+}
+
+function updateP2BuySummary() {
+    const amt = parseFloat(document.getElementById("p2-buy-amount")?.value) || 0;
+    const prStr = document.getElementById("p2-buy-price")?.value || "0";
+    const pr = parseFloat(prStr.replace(/[^0-9.]/g, '')) || 1;
+    const shares = Math.floor(amt / pr);
+    const total = shares * pr;
+    const summaryEl = document.getElementById("p2-buy-calc-summary");
+    if (summaryEl) {
+        summaryEl.innerHTML = `Estimated: ~<strong>${shares}</strong> shares @ ₹${pr.toFixed(2)} = <strong>₹${total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>`;
+    }
+}
+
+window.openP2BuyModal = function(symbol, price, sl, tgt, stockName) {
+    const modal = document.getElementById("modal-p2-confirm-buy");
+    if (!modal) return;
+    const symInput = document.getElementById("p2-buy-symbol");
+    const nameEl   = document.getElementById("p2-buy-name");
+    const prInput  = document.getElementById("p2-buy-price");
+    const slInput  = document.getElementById("p2-buy-sl");
+    const tgtInput = document.getElementById("p2-buy-tgt");
+    const amtInput = document.getElementById("p2-buy-amount");
+
+    const p = Number(price) || 0;
+    if (symInput) symInput.value = symbol;
+    if (nameEl)   nameEl.textContent = stockName || symbol;
+    if (prInput)  prInput.value = `₹${p.toFixed(2)}`;
+    if (slInput)  slInput.value = `₹${Number(sl || 0).toFixed(2)}`;
+    if (tgtInput) tgtInput.value = `₹${Number(tgt || 0).toFixed(2)}`;
+    if (amtInput) amtInput.value = "20000";
+
+    updateP2BuySummary();
+    modal.classList.add("active");
+};
+
+window.closeP2BuyModal = function() {
+    const modal = document.getElementById("modal-p2-confirm-buy");
+    if (modal) modal.classList.remove("active");
+};
+
+async function submitP2BuyForm(e) {
+    e.preventDefault();
+    const symbol = document.getElementById("p2-buy-symbol")?.value;
+    const amount = parseFloat(document.getElementById("p2-buy-amount")?.value) || 20000;
+    const submitBtn = document.getElementById("btn-submit-p2-buy");
+
+    if (!symbol) return;
+
+    if (!appState.isLiveBackend) {
+        showToast("Static Dashboard: Live paper orders require local Python server (run start_trading_terminal.bat). Order saved for local execution.", "warning");
+        closeP2BuyModal();
+        return;
+    }
+
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "⏳ Executing Buy..."; }
+
+    try {
+        const res = await fetch(`${API_BASE}/api/p2/actions/buy`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ symbol: symbol, position_size: amount })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+            showToast(`✅ ${data.message}`, "success");
+            closeP2BuyModal();
+            await loadP2Data();
+        } else {
+            showToast(data.detail || data.message || "Could not execute buy order.", "error");
+        }
+    } catch (err) {
+        showToast(`Buy error: ${err.message}`, "error");
+    } finally {
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "✅ Confirm & Execute Buy"; }
+    }
 }
 
 function switchPortfolio(portfolioNum) {
@@ -1572,22 +1659,41 @@ function renderP2Watchlist() {
     if (!tbody) return;
 
     if (!items.length) {
-        tbody.innerHTML = '<tr><td colspan="11" class="table-empty">No Wyckoff candidates yet. Run a scan.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="12" class="table-empty">No Wyckoff candidates yet. Run a scan.</td></tr>';
         if (mobileDiv) mobileDiv.innerHTML = "";
         return;
     }
 
     const scoreColor = (s) => s >= 80 ? "var(--success)" : s >= 60 ? "var(--warning, #f59e0b)" : "var(--text-muted)";
-    const phaseIcon = { "PHASE_D_MARKUP": "\ud83d\ude80", "PHASE_C_SPRING": "\ud83c�", "PHASE_B_ACCUMULATION": "\ud83d�", "PHASE_A_STOPPING": "\u23f8\ufe0f", "UNCERTAIN": "\u2753" };
-    const fmt = (n) => `\u20b9${Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const phaseIcon = { "PHASE_D_MARKUP": "🚀", "PHASE_C_SPRING": "🌱", "PHASE_B_ACCUMULATION": "🏗", "PHASE_A_STOPPING": "⏸️", "UNCERTAIN": "❓" };
+    const fmt = (n) => `₹${Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
     tbody.innerHTML = items.map(item => {
         const score = Number(item.wyckoff_score || 0);
         const phase = item.phase_label || "UNKNOWN";
-        const icon  = phaseIcon[phase] || "\u2753";
-        const spring = item.spring_detected ? "<span class='badge-yes'>\u2705 Spring</span>" : "<span class='badge-no'>\u2013</span>";
-        const sos    = item.sos_detected    ? "<span class='badge-yes'>\u2705 SOS</span>"    : "<span class='badge-no'>\u2013</span>";
+        const icon  = phaseIcon[phase] || "❓";
+        const spring = item.spring_detected ? "<span class='badge-yes'>✅ Spring</span>" : "<span class='badge-no'>–</span>";
+        const sos    = item.sos_detected    ? "<span class='badge-yes'>✅ SOS</span>"    : "<span class='badge-no'>–</span>";
         const statusClass = { PENDING: "text-cyan", TRIGGERED: "text-positive", EXPIRED: "text-muted", REJECTED: "text-danger" }[item.status] || "";
+
+        const isPending   = item.status === "PENDING";
+        const isTriggered = item.status === "TRIGGERED";
+        const isRejected  = item.status === "REJECTED";
+        const safeSym     = (item.symbol || "").replace(/'/g, "\\'");
+        const safeName    = (item.stock_name || item.symbol || "").replace(/'/g, "\\'");
+        const safePrice   = Number(item.cmp_report || item.entry_price || 0);
+        const safeSL      = Number(item.suggested_stop_loss || 0);
+        const safeTgt     = Number(item.suggested_target || 0);
+
+        let actionHtml = `<span style="color:#64748b;font-size:11px;">—</span>`;
+        if (isPending) {
+            actionHtml = `<button class="p2-confirm-buy-btn" onclick="openP2BuyModal('${safeSym}', ${safePrice}, ${safeSL}, ${safeTgt}, '${safeName}')">✅ Confirm Buy</button>`;
+        } else if (isTriggered) {
+            actionHtml = `<span class="badge-yes" style="font-size:11px;">✅ Bought</span>`;
+        } else if (isRejected) {
+            actionHtml = `<span class="badge-no" style="font-size:11px;">❌ Rejected</span>`;
+        }
+
         return `
         <tr>
             <td><strong style="color:#f8fafc;">${item.symbol}</strong>
@@ -1605,6 +1711,7 @@ function renderP2Watchlist() {
             <td style="color:var(--danger);">${fmt(item.suggested_stop_loss)} <span style="font-size:10px;color:#64748b;">(-${Number(item.sl_pct||0).toFixed(1)}%)</span></td>
             <td style="color:var(--success);">${fmt(item.suggested_target)} <span style="font-size:10px;color:#64748b;">(+${Number(item.target_pct||0).toFixed(0)}%)</span></td>
             <td><span class="${statusClass}">${item.status}</span></td>
+            <td>${actionHtml}</td>
         </tr>`;
     }).join("");
 
@@ -1613,7 +1720,14 @@ function renderP2Watchlist() {
         mobileDiv.innerHTML = items.map(item => {
             const score = Number(item.wyckoff_score || 0);
             const phase = item.phase_label || "UNKNOWN";
-            const icon  = phaseIcon[phase] || "\u2753";
+            const icon  = phaseIcon[phase] || "❓";
+            const isPending   = item.status === "PENDING";
+            const safeSym     = (item.symbol || "").replace(/'/g, "\\'");
+            const safeName    = (item.stock_name || item.symbol || "").replace(/'/g, "\\'");
+            const safePrice   = Number(item.cmp_report || item.entry_price || 0);
+            const safeSL      = Number(item.suggested_stop_loss || 0);
+            const safeTgt     = Number(item.suggested_target || 0);
+
             return `
             <div class="position-card" style="border-left:3px solid ${scoreColor(score)};">
                 <div class="pos-card-header">
@@ -1632,12 +1746,14 @@ function renderP2Watchlist() {
                     <div><span class="pos-label">Entry</span><span style="color:#f8fafc;font-weight:600;">${fmt(item.entry_price)}</span></div>
                     <div><span class="pos-label">SL</span><span style="color:var(--danger);">${fmt(item.suggested_stop_loss)}</span></div>
                     <div><span class="pos-label">Target</span><span style="color:var(--success);">${fmt(item.suggested_target)}</span></div>
-                    <div><span class="pos-label">Spring/SOS</span><span>${item.spring_detected?'\u2705 Spring':'\u2013'} ${item.sos_detected?'\u2705 SOS':''}</span></div>
+                    <div><span class="pos-label">Spring/SOS</span><span>${item.spring_detected?'✅ Spring':'–'} ${item.sos_detected?'✅ SOS':''}</span></div>
+                    ${isPending ? `<div style="grid-column: span 2; margin-top: 8px;"><button class="p2-confirm-buy-btn" style="width:100%; justify-content:center; padding:9px 12px; font-size:13px;" onclick="openP2BuyModal('${safeSym}', ${safePrice}, ${safeSL}, ${safeTgt}, '${safeName}')">✅ Confirm Buy (~₹20,000)</button></div>` : ''}
                 </div>
             </div>`;
         }).join("");
     }
 }
+
 
 function renderP2Positions() {
     const items = appState.p2Positions || [];

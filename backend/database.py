@@ -357,7 +357,21 @@ def reset_portfolio():
         conn.execute("DELETE FROM trades")
         conn.execute("DELETE FROM watchlist")
         conn.commit()
-    log_event("WARNING", "Portfolio has been reset to initial capital ₹1,00,000")
+    log_event("WARNING", "Portfolio 1 has been reset to initial capital ₹1,00,000")
+
+
+def reset_p2_portfolio():
+    """Resets Portfolio 2 to ₹1,00,000 all-cash baseline, clearing positions and resetting watchlist to PENDING."""
+    with get_db() as conn:
+        conn.execute("UPDATE portfolio_state SET cash_balance = 100000.0, invested_capital = 0.0, realized_pnl = 0.0 WHERE id = 2")
+        conn.execute("DELETE FROM p2_positions")
+        conn.execute("DELETE FROM p2_trades")
+        conn.execute("UPDATE p2_watchlist SET status = 'PENDING'")
+        conn.commit()
+    log_event("INFO", "Portfolio 2 reset to 100% cash (₹1,00,000.00). All candidates kept in PENDING for confirmation.")
+    export_p2_snapshot()
+    export_portfolio_snapshot()
+
 
 def add_watchlist_items(items: List[Dict[str, Any]]) -> int:
     added = 0

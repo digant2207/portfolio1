@@ -27,9 +27,22 @@
                     <img src="apple-touch-icon.png" alt="Portfolio 1" style="width: 34px; height: 34px; object-fit: cover; display: block; border-radius: 7px;">
                 </div>
                 <div class="brand-info">
-                    <h1 class="brand-title">PORTFOLIO 1 <span>200 DMA</span></h1>
-                    <span class="brand-subtitle">Smart Money Trading Ledger</span>
+                    <h1 class="brand-title" id="brand-title">PORTFOLIO 1 <span id="brand-strategy">200 DMA</span></h1>
+                    <span class="brand-subtitle" id="brand-subtitle">Smart Money Trading Ledger</span>
                 </div>
+            </div>
+
+            <!-- Portfolio 1 / Portfolio 2 Toggle -->
+            <div class="portfolio-toggle-group" id="portfolio-toggle-group">
+                <button class="portfolio-toggle-btn active" id="btn-p1" data-portfolio="1" title="Portfolio 1: 200 DMA Breakout Strategy">
+                    <span class="ptb-icon">📈</span>
+                    <span class="ptb-label">P1 <span class="ptb-sub">200 DMA</span></span>
+                </button>
+                <div class="portfolio-toggle-divider"></div>
+                <button class="portfolio-toggle-btn" id="btn-p2" data-portfolio="2" title="Portfolio 2: Wyckoff Swing Delivery (5–10 Days)">
+                    <span class="ptb-icon">🌊</span>
+                    <span class="ptb-label">P2 <span class="ptb-sub">Wyckoff</span></span>
+                </button>
             </div>
 
             <div class="header-status-group">
@@ -142,7 +155,7 @@
             </section>
 
             <!-- Desktop & Laptop Tab Navigation Bar -->
-            <div class="tab-navigation-bar">
+            <div class="tab-navigation-bar" id="p1-tab-nav">
                 <div class="tab-links">
                     <button class="tab-link active" data-tab="tab-upcoming" id="tab-btn-upcoming">
                         🎯 Upcoming Trades <span class="tab-badge" id="badge-upcoming-count">0</span>
@@ -166,6 +179,29 @@
                 <div class="tab-actions">
                     <button class="btn btn-sm btn-outline text-danger" id="btn-reset-portfolio">
                         Reset Portfolio
+                    </button>
+                </div>
+            </div>
+
+            <!-- Portfolio 2 Tab Navigation Bar (hidden by default) -->
+            <div class="tab-navigation-bar" id="p2-tab-nav" style="display:none;">
+                <div class="tab-links">
+                    <button class="tab-link active" data-tab="tab-p2-watchlist" id="tab-btn-p2-watchlist">
+                        🌊 Wyckoff Candidates <span class="tab-badge" id="badge-p2-watchlist-count">0</span>
+                    </button>
+                    <button class="tab-link" data-tab="tab-p2-positions" id="tab-btn-p2-positions">
+                        💼 Swing Holdings <span class="tab-badge" id="badge-p2-positions-count">0</span>
+                    </button>
+                    <button class="tab-link" data-tab="tab-p2-trades" id="tab-btn-p2-trades">
+                        📜 P2 Trade History <span class="tab-badge" id="badge-p2-trades-count">0</span>
+                    </button>
+                </div>
+                <div class="tab-actions">
+                    <button class="btn btn-sm btn-outline" id="btn-p2-run-cycle" style="margin-right: 6px;">
+                        ⚡ Run P2 Cycle
+                    </button>
+                    <button class="btn btn-sm btn-primary" id="btn-p2-scan">
+                        🔍 Run Wyckoff Scan
                     </button>
                 </div>
             </div>
@@ -404,6 +440,122 @@
                     </div>
                 </div>
             </section>
+
+            <!-- ==========================================================================
+                 P2 Tab 1: WYCKOFF CANDIDATES
+                 ========================================================================== -->
+            <section class="tab-pane p2-tab-pane" id="tab-p2-watchlist" style="display:none;">
+                <div class="card terminal-card">
+                    <div class="card-toolbar">
+                        <div class="toolbar-title">
+                            <h3>🌊 Wyckoff Swing Candidates <span class="p2-strategy-badge">Portfolio 2</span></h3>
+                            <p class="section-desc">
+                                Stocks screened via <strong>Wyckoff + VSA</strong>. Score ≥ 60 qualifies.
+                                Each entry shows Phase label, Spring/SOS detection, and auto-calculated entry plan
+                                (SL –3.5% to –5% | Target +8% to +14%).
+                            </p>
+                        </div>
+                    </div>
+                    <!-- Desktop Table -->
+                    <div class="table-scroll-wrap">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Stock</th>
+                                    <th>Score</th>
+                                    <th>Phase</th>
+                                    <th>CMP</th>
+                                    <th>Support / Resistance</th>
+                                    <th>Spring</th>
+                                    <th>SOS</th>
+                                    <th>Entry</th>
+                                    <th>Stop-Loss</th>
+                                    <th>Target</th>
+                                    <th>Status</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="p2-watchlist-table-body">
+                                <tr><td colspan="12" class="table-empty">Run Wyckoff Scan to populate candidates.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <!-- Mobile Cards -->
+                    <div class="mobile-cards-container" id="p2-watchlist-mobile-cards"></div>
+                </div>
+            </section>
+
+            <!-- ==========================================================================
+                 P2 Tab 2: SWING HOLDINGS (Open Positions)
+                 ========================================================================== -->
+            <section class="tab-pane p2-tab-pane" id="tab-p2-positions" style="display:none;">
+                <div class="card terminal-card">
+                    <div class="card-toolbar">
+                        <div class="toolbar-title">
+                            <h3>💼 Active Swing Holdings <span class="p2-strategy-badge">Portfolio 2</span></h3>
+                            <p class="section-desc">
+                                Wyckoff swing delivery positions. Trailing stop activates at <strong>+5% gain</strong>.
+                                Time-stop exits after <strong>10 sessions</strong>.
+                            </p>
+                        </div>
+                    </div>
+                    <div class="table-scroll-wrap">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Stock</th>
+                                    <th>Qty</th>
+                                    <th>Buy Price</th>
+                                    <th>CMP</th>
+                                    <th>Effective SL</th>
+                                    <th>Target</th>
+                                    <th>Sessions</th>
+                                    <th>Trailing</th>
+                                    <th>P&amp;L</th>
+                                </tr>
+                            </thead>
+                            <tbody id="p2-positions-table-body">
+                                <tr><td colspan="9" class="table-empty">No open Wyckoff swing positions.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="mobile-cards-container" id="p2-positions-mobile-cards"></div>
+                </div>
+            </section>
+
+            <!-- ==========================================================================
+                 P2 Tab 3: PORTFOLIO 2 TRADE HISTORY
+                 ========================================================================== -->
+            <section class="tab-pane p2-tab-pane" id="tab-p2-trades" style="display:none;">
+                <div class="card terminal-card">
+                    <div class="card-toolbar">
+                        <div class="toolbar-title">
+                            <h3>📜 Portfolio 2 Trade History <span class="p2-strategy-badge">Wyckoff Swing</span></h3>
+                        </div>
+                    </div>
+                    <div class="table-scroll-wrap">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Type</th>
+                                    <th>Stock</th>
+                                    <th>Price</th>
+                                    <th>Qty</th>
+                                    <th>Total Value</th>
+                                    <th>P&amp;L</th>
+                                    <th>Exit Reason</th>
+                                    <th>Timestamp</th>
+                                </tr>
+                            </thead>
+                            <tbody id="p2-trades-table-body">
+                                <tr><td colspan="9" class="table-empty">No Portfolio 2 trades recorded yet.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
         </main>
 
         <!-- Mobile Sticky Bottom Navigation Bar -->
@@ -554,6 +706,56 @@
                     <div class="modal-footer">
                         <button type="button" class="btn btn-outline" id="btn-cancel-sim-price">Cancel</button>
                         <button type="submit" class="btn btn-primary">Apply Test Price</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirm Portfolio 2 Buy Modal -->
+    <div class="modal-overlay" id="modal-p2-confirm-buy">
+        <div class="modal-content modal-md">
+            <div class="modal-header">
+                <h3>🛡️ Confirm Portfolio 2 Buy Order</h3>
+                <button class="modal-close" id="btn-close-p2-buy">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+                    <div style="font-weight: 600; color: #10b981; margin-bottom: 4px;">🛡️ Capital Preservation First</div>
+                    <div style="font-size: 13px; color: #cbd5e1;">Portfolio 2 never buys stocks automatically. Money left in cash is 100% safe. Confirm only if you approve this trade.</div>
+                </div>
+                <form id="p2-buy-form">
+                    <div class="form-group">
+                        <label>Stock Symbol</label>
+                        <input type="text" id="p2-buy-symbol" readonly style="font-weight: 700; color: #38bdf8;">
+                        <div id="p2-buy-name" style="font-size: 12px; color: #94a3b8; margin-top: 2px;"></div>
+                    </div>
+                    <div class="form-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label>Current Market Price (₹)</label>
+                            <input type="text" id="p2-buy-price" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label>Position Allocation (₹)</label>
+                            <input type="number" id="p2-buy-amount" value="20000" step="1000" min="1000" max="100000">
+                        </div>
+                    </div>
+                    <div class="form-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label>Suggested Stop-Loss</label>
+                            <input type="text" id="p2-buy-sl" readonly style="color: var(--danger);">
+                        </div>
+                        <div class="form-group">
+                            <label>Suggested Target</label>
+                            <input type="text" id="p2-buy-tgt" readonly style="color: var(--success);">
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-top: 8px; padding: 10px; background: rgba(15, 23, 42, 0.6); border-radius: 6px;">
+                        <div style="font-size: 13px; color: #f8fafc;" id="p2-buy-calc-summary">Estimated: ~0 shares</div>
+                    </div>
+                    <div class="modal-footer" style="margin-top: 16px;">
+                        <button type="button" class="btn btn-outline" id="btn-cancel-p2-buy">Cancel (Keep Cash)</button>
+                        <button type="submit" class="btn btn-primary" id="btn-submit-p2-buy">✅ Confirm &amp; Execute Buy</button>
                     </div>
                 </form>
             </div>

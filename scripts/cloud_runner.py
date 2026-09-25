@@ -24,7 +24,7 @@ from backend.notifier import send_daily_email_report
 
 def main():
     parser = argparse.ArgumentParser(description="Paper Trading Cloud Runner")
-    parser.add_argument("--task", choices=["fetch-sheets", "fetch-mail", "trade-cycle", "p2-trade-cycle", "daily-report", "evening-report", "evening-watchlist", "export-snapshot", "wyckoff-scan"], required=True, help="Task to execute")
+    parser.add_argument("--task", choices=["fetch-sheets", "fetch-mail", "trade-cycle", "p2-trade-cycle", "daily-report", "evening-report", "evening-watchlist", "evening-wyckoff", "export-snapshot", "wyckoff-scan"], required=True, help="Task to execute")
     args = parser.parse_args()
 
     init_db()
@@ -77,15 +77,25 @@ def main():
             success, msg = send_daily_email_report()
             if success:
                 record_notification_sent(today_str, "DAILY_REPORT_630", msg)
-            else:
-                sys.exit(1)
+        # Send dedicated Evening Top 10 Wyckoff candidates Telegram digest
+        try:
+            from backend.notifier import send_evening_p2_wyckoff_top10
+            send_evening_p2_wyckoff_top10()
+        except Exception as e:
+            print(f"[!] Warning sending evening Wyckoff top 10: {e}")
+
         export_portfolio_snapshot()
+
+    elif args.task == "evening-wyckoff":
+        print("[*] Executing Cloud Task: evening-wyckoff (Send Top 10 Wyckoff Candidates to Telegram)")
+        from backend.notifier import send_evening_p2_wyckoff_top10
+        ok, msg = send_evening_p2_wyckoff_top10(force=True)
+        print(f"Result: {msg}")
 
     elif args.task == "wyckoff-scan":
         print("[*] Executing Cloud Task: wyckoff-scan (Wyckoff + VSA Swing Screener)")
         from backend.wyckoff_analyzer import analyze_stock, result_to_dict
         from backend.database import get_all_watchlist, upsert_p2_watchlist, export_p2_snapshot
-        from backend.notifier import notify_p2_scan_results
         from datetime import datetime
 
         wl = get_all_watchlist(limit=100)
@@ -118,10 +128,6 @@ def main():
             upsert_p2_watchlist(passed)
         export_p2_snapshot()
         export_portfolio_snapshot()
-        try:
-            notify_p2_scan_results(results)
-        except Exception as e:
-            print(f"[!] Notification warning: {e}")
         print(f"Result: Scanned {len(results)} stocks. {len(passed)} passed Wyckoff screening (score >= 60).")
 
 if __name__ == "__main__":

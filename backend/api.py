@@ -18,7 +18,7 @@ from .database import (
     update_watchlist_status, get_today_trades, get_upcoming_trades, export_portfolio_snapshot,
     # Portfolio 2
     get_p2_portfolio_summary, get_p2_open_positions, get_p2_trades, get_p2_watchlist,
-    upsert_p2_watchlist, increment_p2_session_counters, export_p2_snapshot,
+    upsert_p2_watchlist, increment_p2_session_counters, export_p2_snapshot, reset_p2_portfolio,
 )
 from .market_data import get_market_status, simulate_price_update
 from .sheet_reader import fetch_and_process_sheets, clean_sheet_symbol
@@ -407,6 +407,28 @@ def api_p2_close_position(position_id: int):
         raise HTTPException(status_code=400, detail="Could not close Portfolio 2 position.")
     return {"success": True, "message": f"Portfolio 2 position {position_id} closed successfully."}
 
+
+class P2BuyRequest(BaseModel):
+    symbol: str
+    position_size: Optional[float] = 20000.0
+
+
+@app.post("/api/p2/actions/buy")
+def api_p2_buy(payload: P2BuyRequest):
+    """Executes a confirmed buy for a specific Wyckoff candidate in Portfolio 2."""
+    from .trading_engine import execute_p2_buy_confirmed
+    trade = execute_p2_buy_confirmed(payload.symbol, position_size=payload.position_size or 20000.0)
+    if not trade:
+        raise HTTPException(status_code=400, detail=f"Could not execute confirmed buy for {payload.symbol}. Check cash balance or candidate status.")
+    return {"success": True, "message": f"Confirmed buy executed for {payload.symbol}: {trade['quantity']} shares @ ₹{trade['price']}", "trade": trade}
+
+
+@app.post("/api/p2/actions/reset")
+def api_p2_reset():
+    """Resets Portfolio 2 to ₹1,00,000 all-cash baseline without touching Portfolio 1."""
+    reset_p2_portfolio()
+    return {"success": True, "message": "Portfolio 2 reset to 100% cash (₹1,00,000.00)."}
+
 # Serve frontend static files
 if FRONTEND_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
@@ -432,6 +454,14 @@ def serve_snapshot():
     if p.exists():
         return FileResponse(p, media_type="application/json")
     return export_portfolio_snapshot()
+
+@app.get("/p2_snapshot.json")
+@app.get("/data/p2_snapshot.json")
+def serve_p2_snapshot():
+    p = BASE_DIR / "data" / "p2_snapshot.json"
+    if p.exists():
+        return FileResponse(p, media_type="application/json")
+    return export_p2_snapshot()
 
 @app.get("/")
 def serve_index():
