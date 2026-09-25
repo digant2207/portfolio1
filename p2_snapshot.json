@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-25 17:01:09 IST",
+  "generated_at": "2026-09-25 17:16:01 IST",
   "date": "2026-09-25",
   "portfolio2": {
     "portfolio_id": 2,
@@ -235,6 +235,35 @@
     }
   ],
   "p2_watchlist": [
+    {
+      "id": 39,
+      "report_date": "2026-09-25",
+      "stock_name": "STERTOOLS.NS",
+      "symbol": "STERTOOLS.NS",
+      "cmp_report": 239.4600067138672,
+      "wyckoff_score": 85.0,
+      "phase_label": "PHASE_D_MARKUP",
+      "support": 210.31,
+      "resistance": 227.05,
+      "range_width_pct": 7.96,
+      "absorption_score": 22.5,
+      "demand_score": 12.5,
+      "spring_detected": 1,
+      "spring_low": 209.0,
+      "sos_detected": 1,
+      "sos_candle_date": "2026-09-24",
+      "avg_volume_20d": 18555.0,
+      "ema_10": 223.97,
+      "entry_price": 239.46,
+      "suggested_stop_loss": 227.49,
+      "sl_pct": 5.0,
+      "suggested_target": 265.8,
+      "target_pct": 11.0,
+      "status": "PENDING",
+      "current_price": null,
+      "last_checked": null,
+      "created_at": "2026-09-25 11:46:01"
+    },
     {
       "id": 24,
       "report_date": "2026-09-25",
