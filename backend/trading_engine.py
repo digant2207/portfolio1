@@ -11,12 +11,16 @@ from typing import Dict, Any, List, Optional
 from .config import load_config
 from .database import (
     get_db, log_event, get_pending_watchlist, get_open_positions,
-    get_portfolio_summary, update_watchlist_price, get_sold_today_symbols
+    get_portfolio_summary, update_watchlist_price, get_sold_today_symbols,
+    get_p2_open_positions, get_p2_portfolio_summary, get_p2_watchlist,
+    export_p2_snapshot, export_portfolio_snapshot
 )
 from .market_data import (
     is_market_open, fetch_current_prices, fetch_market_quotes, fetch_monthly_average_volume
 )
-from .notifier import notify_trade_buy, notify_trade_sell
+from .notifier import (
+    notify_trade_buy, notify_trade_sell, notify_p2_buy, notify_p2_sell
+)
 
 def execute_stop_loss_exit(pos: Dict[str, Any], cmp: float, exit_reason: str = "STOP_LOSS_HIT", conn: Optional[Any] = None) -> Dict[str, Any]:
     """
@@ -448,3 +452,348 @@ def manual_close_position(position_id: int) -> bool:
             log_event("WARNING", f"Telegram alert error on manual close: {tg_err}")
             
         return True
+
+
+# ============================================================================
+# PORTFOLIO 2: WYCKOFF SWING DELIVERY TRADING ENGINE (5–10 DAYS)
+# ============================================================================
+
+def execute_p2_buy(candidate: Dict[str, Any], cmp: float, conn: Optional[Any] = None, position_size: float = 20000.0) -> Optional[Dict[str, Any]]:
+    """
+    Executes a high-conviction delivery buy for Portfolio 2 based on Wyckoff VSA signals.
+    - Sizing: ₹20,000 per position (5 max for ₹1,00,000 capital)
+    - Stop-Loss: below Spring low / swing support (-3.5% to -5.0%)
+    - Target: Phase E markup (+8% to +14%)
+    - Trailing stop trigger: +5%
+    """
+    sym = candidate.get("symbol", "")
+    stock_name = candidate.get("stock_name") or sym
+    if not sym or cmp <= 0:
+        return None
+
+    own_conn = False
+    if conn is None:
+        conn = get_db()
+        own_conn = True
+
+    try:
+        cursor = conn.cursor()
+
+        # Check if already open in P2
+        open_pos = cursor.execute("SELECT id FROM p2_positions WHERE symbol = ? AND status = 'OPEN'", (sym,)).fetchone()
+        if open_pos:
+            return None
+
+        # Check total open positions count in P2
+        open_count_row = cursor.execute("SELECT COUNT(*) FROM p2_positions WHERE status = 'OPEN'").fetchone()
+        open_count = open_count_row[0] if open_count_row else 0
+        if open_count >= 5:
+            return None
+
+        # Check P2 cash balance
+        p2_state = cursor.execute("SELECT * FROM portfolio_state WHERE id = 2").fetchone()
+        if not p2_state:
+            return None
+        cash = float(p2_state["cash_balance"])
+
+        alloc = min(position_size, cash)
+        if alloc < 5000 or cmp > alloc:
+            return None
+
+        quantity = int(alloc // cmp)
+        if quantity <= 0:
+            return None
+
+        invested = round(quantity * cmp, 2)
+        sl = candidate.get("suggested_stop_loss") or round(cmp * (1 - (candidate.get("sl_pct") or 3.5) / 100), 2)
+        tgt = candidate.get("suggested_target") or round(cmp * (1 + (candidate.get("target_pct") or 8.0) / 100), 2)
+        sl_pct = candidate.get("sl_pct") or round(((cmp - sl) / cmp) * 100, 1)
+        tgt_pct = candidate.get("target_pct") or round(((tgt - cmp) / cmp) * 100, 1)
+        score = candidate.get("wyckoff_score", 0.0)
+        phase = candidate.get("phase_label", "PHASE_D_MARKUP")
+        wl_id = candidate.get("id")
+
+        # Insert position
+        cursor.execute("""
+            INSERT INTO p2_positions (
+                p2_watchlist_id, stock_name, symbol, buy_price, quantity, invested_amount,
+                stop_loss, target_price, sl_pct, target_pct, trailing_active, trailing_sl,
+                sessions_held, wyckoff_score, phase_label, current_price, status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 0, ?, ?, ?, 'OPEN')
+        """, (
+            wl_id, stock_name, sym, cmp, quantity, invested,
+            sl, tgt, sl_pct, tgt_pct, sl, score, phase, cmp
+        ))
+        pos_id = cursor.lastrowid
+
+        # Deduct cash & update invested capital
+        cursor.execute("""
+            UPDATE portfolio_state SET
+                cash_balance = cash_balance - ?,
+                invested_capital = invested_capital + ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = 2
+        """, (invested, invested))
+
+        # Insert BUY into p2_trades
+        cursor.execute("""
+            INSERT INTO p2_trades (
+                position_id, symbol, stock_name, trade_type, price, quantity, total_value
+            ) VALUES (?, ?, ?, 'BUY', ?, ?, ?)
+        """, (pos_id, sym, stock_name, cmp, quantity, invested))
+
+        # Update watchlist status
+        cursor.execute("UPDATE p2_watchlist SET status = 'TRIGGERED' WHERE symbol = ?", (sym,))
+
+        if own_conn:
+            conn.commit()
+
+        trade_info = {
+            "position_id": pos_id, "symbol": sym, "stock_name": stock_name,
+            "price": cmp, "quantity": quantity, "invested_amount": invested,
+            "stop_loss": sl, "target_price": tgt, "sl_pct": sl_pct,
+            "target_pct": tgt_pct, "wyckoff_score": score, "phase_label": phase
+        }
+        log_event("TRADE", f"🌊 [P2 BUY] {sym}: {quantity} shares @ ₹{cmp:.2f} (Total: ₹{invested:.2f}) | Target: ₹{tgt:.2f} (+{tgt_pct}%), SL: ₹{sl:.2f} (-{sl_pct}%)", conn=conn)
+
+        try:
+            notify_p2_buy(trade_info)
+        except Exception as e:
+            print(f"[!] Warning sending P2 buy Telegram notification: {e}")
+
+        return trade_info
+
+    except Exception as e:
+        if own_conn:
+            conn.rollback()
+        log_event("ERROR", f"Failed to execute P2 buy for {sym}: {e}", conn=conn if not own_conn else None)
+        return None
+    finally:
+        if own_conn:
+            conn.close()
+
+
+def execute_p2_sell(pos: Dict[str, Any], cmp: float, exit_reason: str, conn: Optional[Any] = None) -> Dict[str, Any]:
+    """
+    Exits an open Portfolio 2 position on Target hit, Stop-Loss, Trailing Stop, Time-Stop, or Manual.
+    """
+    pos_id = pos["id"]
+    sym = pos["symbol"]
+    stock_name = pos.get("stock_name", sym)
+    buy_price = pos["buy_price"]
+    qty = pos["quantity"]
+    sessions = pos.get("sessions_held", 0)
+
+    realized_pnl = round((cmp - buy_price) * qty, 2)
+    proceeds = round(cmp * qty, 2)
+
+    own_conn = False
+    if conn is None:
+        conn = get_db()
+        own_conn = True
+
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE p2_positions SET
+                status = 'CLOSED', close_price = ?, close_timestamp = CURRENT_TIMESTAMP,
+                realized_pnl = ?, exit_reason = ?
+            WHERE id = ? AND status = 'OPEN'
+        """, (cmp, realized_pnl, exit_reason, pos_id))
+
+        if cursor.rowcount == 0:
+            return {"symbol": sym, "already_closed": True}
+
+        # Credit cash and update realized PnL
+        cursor.execute("""
+            UPDATE portfolio_state SET
+                cash_balance = cash_balance + ?,
+                realized_pnl = realized_pnl + ?,
+                invested_capital = invested_capital - ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = 2
+        """, (proceeds, realized_pnl, pos["invested_amount"]))
+
+        # Log to p2_trades
+        cursor.execute("""
+            INSERT INTO p2_trades (
+                position_id, symbol, stock_name, trade_type, price,
+                quantity, total_value, pnl, exit_reason
+            ) VALUES (?, ?, ?, 'SELL', ?, ?, ?, ?, ?)
+        """, (pos_id, sym, stock_name, cmp, qty, proceeds, realized_pnl, exit_reason))
+
+        if own_conn:
+            conn.commit()
+
+        trade_info = {
+            "position_id": pos_id, "symbol": sym, "stock_name": stock_name,
+            "price": cmp, "buy_price": buy_price, "quantity": qty,
+            "pnl": realized_pnl, "proceeds": proceeds, "exit_reason": exit_reason,
+            "sessions_held": sessions
+        }
+        sign = "+" if realized_pnl >= 0 else ""
+        log_event("TRADE", f"🌊 [P2 SELL] {sym} exited @ ₹{cmp:.2f} ({exit_reason}): P&L {sign}₹{realized_pnl:.2f}", conn=conn)
+
+        try:
+            notify_p2_sell(trade_info)
+        except Exception as e:
+            print(f"[!] Warning sending P2 sell notification: {e}")
+
+        return trade_info
+
+    except Exception as e:
+        if own_conn:
+            conn.rollback()
+        log_event("ERROR", f"Failed to execute P2 sell for {sym}: {e}")
+        return {"symbol": sym, "error": str(e)}
+    finally:
+        if own_conn:
+            conn.close()
+
+
+def manual_close_p2_position(position_id: int) -> bool:
+    """Manually closes an open Portfolio 2 position from dashboard or API."""
+    with get_db() as conn:
+        pos = conn.execute("SELECT * FROM p2_positions WHERE id = ? AND status = 'OPEN'", (position_id,)).fetchone()
+        if not pos:
+            return False
+        sym = pos["symbol"]
+        prices = fetch_current_prices([sym])
+        cmp = prices.get(sym, pos["current_price"] or pos["buy_price"])
+        res = execute_p2_sell(dict(pos), cmp, exit_reason="MANUAL", conn=conn)
+        export_p2_snapshot()
+        export_portfolio_snapshot()
+        return not res.get("already_closed") and "error" not in res
+
+
+def run_p2_trading_cycle(force_market_open: bool = False, max_positions: int = 5, position_size: float = 20000.0) -> Dict[str, Any]:
+    """
+    Executes a complete Portfolio 2 Wyckoff Swing Delivery cycle:
+    1. Checks exits on active open positions (Target, Stop-Loss, Trailing Stop, Time-Stop).
+    2. Updates Trailing Stop triggers for winning positions (+5% profit activates breakeven/trail).
+    3. Fills empty slots (up to 5 positions) with highest-ranked Wyckoff candidates.
+    4. Updates database, snapshots, and alerts.
+    """
+    if not force_market_open and not is_market_open():
+        return {
+            "status": "MARKET_CLOSED",
+            "message": "Market is currently closed (IST 09:15 - 15:30 Mon-Fri). Use force_market_open=True to test.",
+            "buys_triggered": [], "targets_hit": [], "stop_losses_hit": []
+        }
+
+    with get_db() as conn:
+        open_pos_rows = conn.execute("SELECT * FROM p2_positions WHERE status = 'OPEN'").fetchall()
+        open_positions = [dict(r) for r in open_pos_rows]
+        open_symbols = [p["symbol"] for p in open_positions]
+
+        # Fetch live prices for open positions
+        open_quotes = fetch_current_prices(open_symbols) if open_symbols else {}
+
+        buys = []
+        targets_hit = []
+        stop_losses_hit = []
+
+        # 1. Evaluate open positions for Exits & Trailing Stops
+        for pos in open_positions:
+            sym = pos["symbol"]
+            cmp = open_quotes.get(sym) or pos["current_price"] or pos["buy_price"]
+            buy_price = pos["buy_price"]
+            target_price = pos["target_price"]
+            stop_loss = pos["stop_loss"]
+            trailing_active = bool(pos["trailing_active"])
+            trailing_sl = pos["trailing_sl"] if pos["trailing_sl"] > 0 else stop_loss
+            sessions = pos.get("sessions_held", 0)
+
+            # Update live CMP
+            conn.execute(
+                "UPDATE p2_positions SET current_price = ?, unrealized_pnl = ? WHERE id = ?",
+                (cmp, round((cmp - buy_price) * pos["quantity"], 2), pos["id"])
+            )
+
+            # Check Trailing Stop Activation (+5% gain)
+            gain_pct = ((cmp - buy_price) / buy_price) * 100 if buy_price > 0 else 0.0
+            if gain_pct >= 5.0 and not trailing_active:
+                trailing_active = True
+                trailing_sl = max(stop_loss, buy_price)  # move to breakeven
+                conn.execute(
+                    "UPDATE p2_positions SET trailing_active = 1, trailing_sl = ? WHERE id = ?",
+                    (trailing_sl, pos["id"])
+                )
+                log_event("TRADE", f"🌊 [P2 TRAILING ACTIVE] {sym} reached +{gain_pct:.1f}%! Stop-Loss moved to breakeven ₹{trailing_sl:.2f}")
+
+            # Advance Trailing Stop if CMP moves higher (+8% or more)
+            if trailing_active and gain_pct >= 8.0:
+                trail_candidate = round(cmp * 0.96, 2)  # 4% trailing cushion
+                if trail_candidate > trailing_sl:
+                    trailing_sl = trail_candidate
+                    conn.execute("UPDATE p2_positions SET trailing_sl = ? WHERE id = ?", (trailing_sl, pos["id"]))
+                    log_event("TRADE", f"🌊 [P2 TRAIL UPDATED] {sym} trailing SL raised to ₹{trailing_sl:.2f}")
+
+            effective_sl = trailing_sl if trailing_active else stop_loss
+
+            # Check Exits: Target Hit
+            if cmp >= target_price:
+                res = execute_p2_sell(pos, cmp, exit_reason="TARGET_HIT", conn=conn)
+                targets_hit.append(res)
+                continue
+
+            # Check Exits: Stop Loss Hit / Trailing Stop Hit
+            if cmp <= effective_sl:
+                exit_reason = "TRAILING_STOP" if trailing_active else "STOP_LOSS_HIT"
+                res = execute_p2_sell(pos, cmp, exit_reason=exit_reason, conn=conn)
+                stop_losses_hit.append(res)
+                continue
+
+            # Check Exits: Time Stop (10 trading sessions without reaching target or SL)
+            if sessions >= 10:
+                res = execute_p2_sell(pos, cmp, exit_reason="TIME_STOP", conn=conn)
+                stop_losses_hit.append(res)
+                continue
+
+        conn.commit()
+
+        # 2. Check for New Buys if slots are available (< max_positions)
+        current_open_count = conn.execute("SELECT COUNT(*) FROM p2_positions WHERE status = 'OPEN'").fetchone()[0]
+        slots_available = max_positions - current_open_count
+
+        if slots_available > 0:
+            # Fetch highest scoring Wyckoff candidates that are still PENDING
+            candidates = conn.execute("""
+                SELECT * FROM p2_watchlist
+                WHERE status = 'PENDING'
+                  AND symbol NOT IN (SELECT symbol FROM p2_positions WHERE status = 'OPEN')
+                ORDER BY wyckoff_score DESC
+                LIMIT 20
+            """).fetchall()
+
+            candidate_dicts = [dict(c) for c in candidates]
+            candidate_symbols = [c["symbol"] for c in candidate_dicts]
+            candidate_quotes = fetch_current_prices(candidate_symbols) if candidate_symbols else {}
+
+            for cand in candidate_dicts:
+                if slots_available <= 0:
+                    break
+                sym = cand["symbol"]
+                cmp = candidate_quotes.get(sym) or cand.get("cmp_report") or cand.get("entry_price")
+                entry_price = cand.get("entry_price") or cmp
+
+                # Validate entry range: CMP shouldn't be stretched more than +3% above calculated entry
+                if cmp <= entry_price * 1.03:
+                    trade = execute_p2_buy(cand, cmp, conn=conn, position_size=position_size)
+                    if trade:
+                        buys.append(trade)
+                        slots_available -= 1
+
+        conn.commit()
+
+    export_p2_snapshot()
+    export_portfolio_snapshot()
+
+    summary = {
+        "status": "SUCCESS",
+        "buys_triggered": buys,
+        "targets_hit": targets_hit,
+        "stop_losses_hit": stop_losses_hit,
+        "message": f"Portfolio 2 cycle complete: {len(buys)} buys, {len(targets_hit)} targets, {len(stop_losses_hit)} exits."
+    }
+    return summary

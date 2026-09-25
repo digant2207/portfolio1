@@ -1274,6 +1274,12 @@ function initPortfolioToggle() {
         btnScan.addEventListener("click", runWyckoffScan);
     }
 
+    // Run P2 Cycle button
+    const btnRunCycle = document.getElementById("btn-p2-run-cycle");
+    if (btnRunCycle) {
+        btnRunCycle.addEventListener("click", runP2Cycle);
+    }
+
     // P2 tabs
     document.querySelectorAll("#p2-tab-nav .tab-link").forEach(tab => {
         tab.addEventListener("click", () => switchP2Tab(tab.getAttribute("data-tab")));
@@ -1448,6 +1454,36 @@ async function runWyckoffScan() {
         showToast(`Scan error: ${e.message}`, "error");
     } finally {
         if (btn) { btn.disabled = false; btn.textContent = "🔍 Run Wyckoff Scan"; }
+    }
+}
+
+async function runP2Cycle() {
+    const btn = document.getElementById("btn-p2-run-cycle");
+    if (btn) { btn.disabled = true; btn.textContent = "⏳ Running P2 Cycle..."; }
+
+    if (!appState.isLiveBackend) {
+        showToast("Static Dashboard: Live trading requires local server (python run.py) or GitHub Actions. Loaded latest saved state.", "warning");
+        await loadP2SnapshotFallback();
+        if (btn) { btn.disabled = false; btn.textContent = "⚡ Run P2 Cycle"; }
+        return;
+    }
+
+    try {
+        const res = await fetch(`${API_BASE}/api/p2/actions/run-cycle`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ force_market_open: true })
+        });
+        const data = await res.json();
+        const buys = data.buys_triggered?.length || 0;
+        const tgts = data.targets_hit?.length || 0;
+        const sls  = data.stop_losses_hit?.length || 0;
+        showToast(`✅ P2 Cycle complete: ${buys} buys, ${tgts} targets, ${sls} stop-losses.`, "success");
+        await loadP2Data();
+    } catch (e) {
+        showToast(`Cycle error: ${e.message}`, "error");
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = "⚡ Run P2 Cycle"; }
     }
 }
 

@@ -390,6 +390,23 @@ def api_p2_increment_sessions():
     count = increment_p2_session_counters()
     return {"success": True, "positions_updated": count, "message": f"Session counter incremented for {count} open Portfolio 2 positions."}
 
+
+@app.post("/api/p2/actions/run-cycle")
+def api_p2_run_cycle(force_market_open: bool = Body(False, embed=True)):
+    """Runs a complete Portfolio 2 Wyckoff swing trade cycle (exits + buys)."""
+    from .trading_engine import run_p2_trading_cycle
+    return run_p2_trading_cycle(force_market_open=force_market_open)
+
+
+@app.post("/api/p2/positions/{position_id}/close")
+def api_p2_close_position(position_id: int):
+    """Manually closes an open Portfolio 2 position."""
+    from .trading_engine import manual_close_p2_position
+    success = manual_close_p2_position(position_id)
+    if not success:
+        raise HTTPException(status_code=400, detail="Could not close Portfolio 2 position.")
+    return {"success": True, "message": f"Portfolio 2 position {position_id} closed successfully."}
+
 # Serve frontend static files
 if FRONTEND_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")

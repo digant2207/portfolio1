@@ -24,7 +24,7 @@ from backend.notifier import send_daily_email_report
 
 def main():
     parser = argparse.ArgumentParser(description="Paper Trading Cloud Runner")
-    parser.add_argument("--task", choices=["fetch-sheets", "fetch-mail", "trade-cycle", "daily-report", "evening-report", "evening-watchlist", "export-snapshot", "wyckoff-scan"], required=True, help="Task to execute")
+    parser.add_argument("--task", choices=["fetch-sheets", "fetch-mail", "trade-cycle", "p2-trade-cycle", "daily-report", "evening-report", "evening-watchlist", "export-snapshot", "wyckoff-scan"], required=True, help="Task to execute")
     args = parser.parse_args()
 
     init_db()
@@ -41,9 +41,19 @@ def main():
             sys.exit(1)
 
     elif args.task == "trade-cycle":
-        print("[*] Executing Cloud Task: trade-cycle")
-        summary = run_trading_cycle(force_market_open=False)
-        print(f"Result: {len(summary.get('buys_triggered', []))} buys, {len(summary.get('targets_hit', []))} targets, {len(summary.get('stop_losses_hit', []))} stop-losses.")
+        print("[*] Executing Cloud Task: trade-cycle (Portfolio 1: 200 DMA + Portfolio 2: Wyckoff Swing)")
+        from backend.trading_engine import run_trading_cycle, run_p2_trading_cycle
+        summary1 = run_trading_cycle(force_market_open=False)
+        print(f"Portfolio 1 Result: {len(summary1.get('buys_triggered', []))} buys, {len(summary1.get('targets_hit', []))} targets, {len(summary1.get('stop_losses_hit', []))} stop-losses.")
+        summary2 = run_p2_trading_cycle(force_market_open=False)
+        print(f"Portfolio 2 Result: {len(summary2.get('buys_triggered', []))} buys, {len(summary2.get('targets_hit', []))} targets, {len(summary2.get('stop_losses_hit', []))} stop-losses.")
+        export_portfolio_snapshot()
+
+    elif args.task == "p2-trade-cycle":
+        print("[*] Executing Cloud Task: p2-trade-cycle (Portfolio 2: Wyckoff Swing Delivery)")
+        from backend.trading_engine import run_p2_trading_cycle
+        summary2 = run_p2_trading_cycle(force_market_open=False)
+        print(f"Portfolio 2 Result: {len(summary2.get('buys_triggered', []))} buys, {len(summary2.get('targets_hit', []))} targets, {len(summary2.get('stop_losses_hit', []))} stop-losses.")
         export_portfolio_snapshot()
 
     elif args.task == "export-snapshot":
