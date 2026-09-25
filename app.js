@@ -1674,24 +1674,36 @@ function renderP2Watchlist() {
         const icon  = phaseIcon[phase] || "❓";
         const spring = item.spring_detected ? "<span class='badge-yes'>✅ Spring</span>" : "<span class='badge-no'>–</span>";
         const sos    = item.sos_detected    ? "<span class='badge-yes'>✅ SOS</span>"    : "<span class='badge-no'>–</span>";
-        const statusClass = { PENDING: "text-cyan", TRIGGERED: "text-positive", EXPIRED: "text-muted", REJECTED: "text-danger" }[item.status] || "";
 
         const isPending   = item.status === "PENDING";
         const isTriggered = item.status === "TRIGGERED";
         const isRejected  = item.status === "REJECTED";
         const safeSym     = (item.symbol || "").replace(/'/g, "\\'");
         const safeName    = (item.stock_name || item.symbol || "").replace(/'/g, "\\'");
-        const safePrice   = Number(item.cmp_report || item.entry_price || 0);
+        const cmpVal      = Number(item.cmp_report || 0);
+        const triggerVal  = Number(item.entry_price || item.resistance || cmpVal);
         const safeSL      = Number(item.suggested_stop_loss || 0);
         const safeTgt     = Number(item.suggested_target || 0);
 
+        const isBreakout = cmpVal >= triggerVal;
+        const pctAway    = cmpVal > 0 ? (((triggerVal - cmpVal) / cmpVal) * 100).toFixed(1) : "0.0";
+
+        let statusHtml = "";
+        if (isTriggered) {
+            statusHtml = `<span class="badge-yes" style="font-size:11px;">✅ Bought</span>`;
+        } else if (isRejected) {
+            statusHtml = `<span class="badge-no" style="font-size:11px;">❌ Rejected</span>`;
+        } else if (isBreakout) {
+            statusHtml = `<span class="badge-yes" style="font-weight:700;font-size:12px;">🎯 Breakout Confirmed</span>`;
+        } else {
+            statusHtml = `<span style="color:#94a3b8;font-size:11px;">⏳ Waiting (–${pctAway}%)</span>`;
+        }
+
         let actionHtml = `<span style="color:#64748b;font-size:11px;">—</span>`;
         if (isPending) {
-            actionHtml = `<button class="p2-confirm-buy-btn" onclick="openP2BuyModal('${safeSym}', ${safePrice}, ${safeSL}, ${safeTgt}, '${safeName}')">✅ Confirm Buy</button>`;
+            actionHtml = `<button class="p2-confirm-buy-btn" onclick="openP2BuyModal('${safeSym}', ${cmpVal || triggerVal}, ${safeSL}, ${safeTgt}, '${safeName}')">✅ Buy Now</button>`;
         } else if (isTriggered) {
-            actionHtml = `<span class="badge-yes" style="font-size:11px;">✅ Bought</span>`;
-        } else if (isRejected) {
-            actionHtml = `<span class="badge-no" style="font-size:11px;">❌ Rejected</span>`;
+            actionHtml = `<span class="badge-yes" style="font-size:11px;">In Holdings</span>`;
         }
 
         return `
@@ -1700,17 +1712,17 @@ function renderP2Watchlist() {
                 <div style="font-size:11px;color:#94a3b8;">${item.stock_name || ""}</div></td>
             <td><span style="color:${scoreColor(score)};font-weight:700;font-size:15px;">${score.toFixed(0)}</span><span style="color:#64748b;font-size:11px;">/100</span></td>
             <td><span title="${phase}">${icon} <span style="font-size:11px;">${phase.replace(/_/g,' ')}</span></span></td>
-            <td style="font-weight:600;">${fmt(item.cmp_report)}</td>
+            <td style="font-weight:600;">${fmt(cmpVal)}</td>
             <td style="font-size:12px;color:#94a3b8;">
                 <span style="color:var(--danger)">${fmt(item.support)}</span> /
                 <span style="color:var(--success)">${fmt(item.resistance)}</span>
             </td>
             <td>${spring}</td>
             <td>${sos}</td>
-            <td style="color:#f8fafc;">${fmt(item.entry_price)}</td>
+            <td style="color:#f8fafc;font-weight:600;">${fmt(triggerVal)}</td>
             <td style="color:var(--danger);">${fmt(item.suggested_stop_loss)} <span style="font-size:10px;color:#64748b;">(-${Number(item.sl_pct||0).toFixed(1)}%)</span></td>
             <td style="color:var(--success);">${fmt(item.suggested_target)} <span style="font-size:10px;color:#64748b;">(+${Number(item.target_pct||0).toFixed(0)}%)</span></td>
-            <td><span class="${statusClass}">${item.status}</span></td>
+            <td>${statusHtml}</td>
             <td>${actionHtml}</td>
         </tr>`;
     }).join("");
@@ -1724,9 +1736,12 @@ function renderP2Watchlist() {
             const isPending   = item.status === "PENDING";
             const safeSym     = (item.symbol || "").replace(/'/g, "\\'");
             const safeName    = (item.stock_name || item.symbol || "").replace(/'/g, "\\'");
-            const safePrice   = Number(item.cmp_report || item.entry_price || 0);
+            const cmpVal      = Number(item.cmp_report || 0);
+            const triggerVal  = Number(item.entry_price || item.resistance || cmpVal);
             const safeSL      = Number(item.suggested_stop_loss || 0);
             const safeTgt     = Number(item.suggested_target || 0);
+            const isBreakout  = cmpVal >= triggerVal;
+            const pctAway     = cmpVal > 0 ? (((triggerVal - cmpVal) / cmpVal) * 100).toFixed(1) : "0.0";
 
             return `
             <div class="position-card" style="border-left:3px solid ${scoreColor(score)};">
@@ -1742,12 +1757,12 @@ function renderP2Watchlist() {
                 </div>
                 <div class="pos-card-grid">
                     <div><span class="pos-label">Phase</span><span>${icon} ${phase.replace(/_/g,' ')}</span></div>
-                    <div><span class="pos-label">CMP</span><span>${fmt(item.cmp_report)}</span></div>
-                    <div><span class="pos-label">Entry</span><span style="color:#f8fafc;font-weight:600;">${fmt(item.entry_price)}</span></div>
+                    <div><span class="pos-label">CMP</span><span>${fmt(cmpVal)}</span></div>
+                    <div><span class="pos-label">Trigger</span><span style="color:#f8fafc;font-weight:600;">${fmt(triggerVal)}</span></div>
+                    <div><span class="pos-label">Trigger Status</span><span>${isBreakout ? '<strong style="color:var(--success)">🎯 Confirmed</strong>' : `<span style="color:#94a3b8">⏳ –${pctAway}%</span>`}</span></div>
                     <div><span class="pos-label">SL</span><span style="color:var(--danger);">${fmt(item.suggested_stop_loss)}</span></div>
                     <div><span class="pos-label">Target</span><span style="color:var(--success);">${fmt(item.suggested_target)}</span></div>
-                    <div><span class="pos-label">Spring/SOS</span><span>${item.spring_detected?'✅ Spring':'–'} ${item.sos_detected?'✅ SOS':''}</span></div>
-                    ${isPending ? `<div style="grid-column: span 2; margin-top: 8px;"><button class="p2-confirm-buy-btn" style="width:100%; justify-content:center; padding:9px 12px; font-size:13px;" onclick="openP2BuyModal('${safeSym}', ${safePrice}, ${safeSL}, ${safeTgt}, '${safeName}')">✅ Confirm Buy (~₹20,000)</button></div>` : ''}
+                    ${isPending ? `<div style="grid-column: span 2; margin-top: 8px;"><button class="p2-confirm-buy-btn" style="width:100%; justify-content:center; padding:9px 12px; font-size:13px;" onclick="openP2BuyModal('${safeSym}', ${cmpVal || triggerVal}, ${safeSL}, ${safeTgt}, '${safeName}')">✅ Buy Now (~₹20,000)</button></div>` : ''}
                 </div>
             </div>`;
         }).join("");

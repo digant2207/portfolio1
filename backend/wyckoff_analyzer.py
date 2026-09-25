@@ -361,27 +361,35 @@ def _build_entry_plan(result: WyckoffResult) -> WyckoffResult:
     if cmp <= 0:
         return result
 
-    result.entry_price = round(cmp, 2)
+    # Breakout Trigger Level:
+    # If CMP is below resistance, breakout confirms when price breaks through resistance ceiling (+0.5%).
+    # If CMP is already above resistance, current price is the confirmed breakout level.
+    if result.resistance > 0 and cmp < result.resistance:
+        trigger_price = round(result.resistance * 1.005, 2)
+    else:
+        trigger_price = round(cmp, 2)
 
-    # Stop-Loss
+    result.entry_price = trigger_price
+
+    # Stop-Loss: placed below spring low or support floor (-3.5% to -5.0%)
     if result.spring_detected and result.spring_low > 0:
         sl = round(result.spring_low * 0.995, 2)
-        sl_pct = round(((cmp - sl) / cmp) * 100, 2)
+        sl_pct = round(((trigger_price - sl) / trigger_price) * 100, 2)
         if sl_pct < SL_PCT_LOW:
             sl_pct = SL_PCT_LOW
-            sl = round(cmp * (1 - sl_pct / 100), 2)
+            sl = round(trigger_price * (1 - sl_pct / 100), 2)
         elif sl_pct > SL_PCT_HIGH:
             sl_pct = SL_PCT_HIGH
-            sl = round(cmp * (1 - sl_pct / 100), 2)
+            sl = round(trigger_price * (1 - sl_pct / 100), 2)
     else:
         sl_pct = SL_PCT_LOW + ((SL_PCT_HIGH - SL_PCT_LOW) * (1 - result.wyckoff_score / 100))
         sl_pct = round(max(SL_PCT_LOW, min(sl_pct, SL_PCT_HIGH)), 2)
-        sl = round(cmp * (1 - sl_pct / 100), 2)
+        sl = round(trigger_price * (1 - sl_pct / 100), 2)
 
     result.stop_loss = sl
     result.sl_pct    = sl_pct
 
-    # Target
+    # Target: +8% to +14% markup from breakout trigger
     if result.wyckoff_score >= 90:
         target_pct = TARGET_PCT_HIGH
     elif result.wyckoff_score >= 76:
@@ -389,7 +397,7 @@ def _build_entry_plan(result: WyckoffResult) -> WyckoffResult:
     else:
         target_pct = TARGET_PCT_LOW
 
-    result.target_price = round(cmp * (1 + target_pct / 100), 2)
+    result.target_price = round(trigger_price * (1 + target_pct / 100), 2)
     result.target_pct   = target_pct
     return result
 

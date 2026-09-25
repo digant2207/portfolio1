@@ -545,8 +545,7 @@ def execute_p2_buy(candidate: Dict[str, Any], cmp: float, conn: Optional[Any] = 
         # Update watchlist status
         cursor.execute("UPDATE p2_watchlist SET status = 'TRIGGERED' WHERE symbol = ?", (sym,))
 
-        if own_conn:
-            conn.commit()
+        conn.commit()
 
         trade_info = {
             "position_id": pos_id, "symbol": sym, "stock_name": stock_name,
@@ -666,13 +665,14 @@ def manual_close_p2_position(position_id: int) -> bool:
         return not res.get("already_closed") and "error" not in res
 
 
-def run_p2_trading_cycle(force_market_open: bool = False, max_positions: int = 5, position_size: float = 20000.0, auto_buy: bool = False) -> Dict[str, Any]:
+def run_p2_trading_cycle(force_market_open: bool = False, max_positions: int = 5, position_size: float = 20000.0, auto_buy: bool = True) -> Dict[str, Any]:
     """
     Executes a Portfolio 2 Wyckoff Swing Delivery cycle:
     1. Checks exits on active open positions (Target, Stop-Loss, Trailing Stop, Time-Stop).
     2. Updates Trailing Stop triggers for winning positions (+5% profit activates breakeven/trail).
-    3. If auto_buy is True (default False), fills empty slots with confirmed candidates.
-       RULE: By default, never buys in Portfolio 2 without explicit user confirmation!
+    3. If auto_buy is True, automatically buys ONLY when a candidate hits its Confirmed Breakout Trigger:
+       RULE: cmp >= trigger_price AND cmp <= trigger_price * 1.025 (no premature entries, no chasing).
+       If cmp < trigger_price, capital is safely preserved in cash ("money left in hand is ok").
     4. Updates database, snapshots, and alerts.
     """
     if not force_market_open and not is_market_open():
@@ -753,18 +753,22 @@ def run_p2_trading_cycle(force_market_open: bool = False, max_positions: int = 5
 
         conn.commit()
 
-        # 2. Check for New Buys ONLY if auto_buy is explicitly True (User Confirmation Rule)
+        # 2. Check for New Buys: ONLY when Confirmed Breakout Trigger is reached!
         current_open_count = conn.execute("SELECT COUNT(*) FROM p2_positions WHERE status = 'OPEN'").fetchone()[0]
         slots_available = max_positions - current_open_count
 
         if auto_buy and slots_available > 0:
+            # Check available cash in Portfolio 2
+            p2_cash_row = conn.execute("SELECT cash_balance FROM portfolio_state WHERE id = 2").fetchone()
+            cash_avail = p2_cash_row[0] if p2_cash_row else 0.0
+
             # Fetch highest scoring Wyckoff candidates that are still PENDING
             candidates = conn.execute("""
                 SELECT * FROM p2_watchlist
                 WHERE status = 'PENDING'
                   AND symbol NOT IN (SELECT symbol FROM p2_positions WHERE status = 'OPEN')
                 ORDER BY wyckoff_score DESC
-                LIMIT 20
+                LIMIT 25
             """).fetchall()
 
             candidate_dicts = [dict(c) for c in candidates]
@@ -774,16 +778,42 @@ def run_p2_trading_cycle(force_market_open: bool = False, max_positions: int = 5
             for cand in candidate_dicts:
                 if slots_available <= 0:
                     break
+                if cash_avail < (position_size * 0.9):
+                    log_event("INFO", f"Portfolio 2: Cash balance ₹{cash_avail:.2f} is below position allocation ₹{position_size:.2f}. Holding cash safely.", conn=conn)
+                    break
+
                 sym = cand["symbol"]
                 cmp = candidate_quotes.get(sym) or cand.get("cmp_report") or cand.get("entry_price")
-                entry_price = cand.get("entry_price") or cmp
+                if not cmp or cmp <= 0:
+                    continue
 
-                # Validate entry range: CMP shouldn't be stretched more than +3% above calculated entry
-                if cmp <= entry_price * 1.03:
+                trigger_price = float(cand.get("entry_price") or cand.get("resistance") or cand.get("cmp_report") or 0.0)
+                if trigger_price <= 0:
+                    continue
+
+                score = float(cand.get("wyckoff_score") or 0.0)
+                if score < 60:
+                    continue
+
+                # STRICT BREAKOUT CONFIRMATION RULE:
+                # 1. CMP must reach or cross ABOVE trigger_price (Confirmed breakout!)
+                # 2. CMP must NOT be overextended (> 2.5% above trigger_price) — avoid chasing high!
+                # If CMP < trigger_price, breakout is NOT confirmed yet. Money remains safely in cash!
+                is_breakout_confirmed = (cmp >= trigger_price) and (cmp <= round(trigger_price * 1.025, 2))
+
+                if is_breakout_confirmed:
                     trade = execute_p2_buy(cand, cmp, conn=conn, position_size=position_size)
                     if trade:
                         buys.append(trade)
                         slots_available -= 1
+                        cash_avail -= trade.get("invested_amount", position_size)
+                        log_event("TRADE", f"🎯 [P2 BREAKOUT CONFIRMED] {sym} triggered breakout @ ₹{cmp:.2f} (Trigger was ₹{trigger_price:.2f}). Bought {trade['quantity']} shares.", conn=conn)
+                elif cmp < trigger_price:
+                    # Breakout not yet confirmed. Do not buy! Cash remains untouched.
+                    continue
+                else:
+                    # Overextended > 2.5% above trigger. Skip to avoid chasing high.
+                    continue
 
         conn.commit()
 
