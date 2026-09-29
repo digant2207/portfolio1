@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-29 18:31:18 IST",
+  "generated_at": "2026-09-29 18:45:59 IST",
   "date": "2026-09-29",
   "portfolio": {
     "initial_capital": 100000.0,
@@ -850,7 +850,7 @@
       "sheet_trigger": null,
       "sheet_stop_loss": null,
       "sheet_stop_loss_raw": null,
-      "dma_50": 171.18,
+      "dma_50": 171.19,
       "volume_today": 15901075.0,
       "vol_pct": 146.24,
       "distance_pct": -1.7,
