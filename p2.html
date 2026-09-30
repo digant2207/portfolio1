@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Smart Money Wyckoff Swing Delivery - Portfolio 2</title>
+    <meta name="description" content="Portfolio 2: Wyckoff Swing Delivery Trading Terminal (5–10 days holding, 20% target, 5% stop-loss, breakout confirmation).">
+    
+    <!-- Google Fonts Inter & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles_p2.css">
+    
+    <!-- iPhone iOS Home Screen Web App & 3D Icon Support for Portfolio 2 -->
+    <link rel="apple-touch-icon" href="apple-touch-icon-p2.png">
+    <link rel="icon" type="image/png" href="favicon-p2.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Portfolio 2">
+</head>
+<body class="dark-theme">
+    <div class="app-layout">
+        <!-- Top Navigation Header -->
+        <header class="top-nav" id="top-nav-bar">
+            <div class="brand-group">
+                <div class="brand-logo" style="overflow: hidden; border-radius: 8px; border: 1px solid rgba(168,85,247,0.5); padding: 0;">
+                    <img src="apple-touch-icon-p2.png" alt="Portfolio 2" style="width: 34px; height: 34px; object-fit: cover; display: block; border-radius: 7px;">
+                </div>
+                <div class="brand-info">
+                    <h1 class="brand-title" id="brand-title">PORTFOLIO 2 <span class="p2-badge-pill">WYCKOFF SWING</span></h1>
+                    <span class="brand-subtitle" id="brand-subtitle">5–10 Days Delivery · Breakout Confirmed</span>
+                </div>
+            </div>
+
+            <!-- Direct Switcher Link back to Portfolio 1 -->
+            <a href="index.html" class="portfolio-switch-btn p1-theme-btn" title="Open Portfolio 1 (200 DMA Breakout)">
+                <span class="p-btn-icon">📈</span>
+                <span class="p-btn-text">Portfolio 1 <small>200 DMA</small></span>
+                <span class="p-btn-arrow">&rarr;</span>
+            </a>
+
+            <div class="header-status-group">
+                <div class="status-badge" id="market-status-badge">
+                    <span class="pulse-dot" id="market-pulse" style="background:#a855f7;"></span>
+                    <span id="market-status-text">Checking Market...</span>
+                </div>
+                <div class="sync-mode-badge" id="sync-mode-badge" title="Data connection mode">
+                    <span class="pulse-dot" style="background:#c084fc;"></span> Live
+                </div>
+                <div class="clock-badge" id="ist-clock-badge">
+                    <span class="clock-icon">🕒</span>
+                    <span id="ist-clock-text">--:--:-- IST</span>
+                </div>
+            </div>
+
+            <div class="header-actions">
+                <button class="btn btn-primary" id="btn-p2-run-cycle" title="Run manual check & trailing stop execution">
+                    <span class="btn-icon">⚡</span> Run Cycle
+                </button>
+                <button class="btn btn-secondary" id="btn-p2-scan" title="Scan Nifty 500 for fresh Wyckoff setups">
+                    <span class="btn-icon">🔍</span> Scan Wyckoff
+                </button>
+                <button class="btn btn-icon-only" id="btn-open-settings" title="System Settings">
+                    ⚙️
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Dashboard Container -->
+        <main class="main-content">
+            <!-- Hero Metrics Overview Cards -->
+            <section class="metrics-grid" id="metrics-overview">
+                <!-- 1. Total Portfolio Value -->
+                <div class="metric-card card-glow-p2">
+                    <div class="metric-header">
+                        <span class="metric-label">Total Portfolio Value</span>
+                        <span class="metric-pill" style="color:#e9d5ff; background:rgba(168,85,247,0.18);">Base: ₹1,00,000</span>
+                    </div>
+                    <div class="metric-value-row">
+                        <span class="metric-value text-violet" id="val-total-portfolio">₹1,00,000.00</span>
+                    </div>
+                    <div class="metric-subtext">
+                        <span class="return-indicator" id="val-total-return">+0.00%</span>
+                        <span style="color:var(--text-muted); margin-left:4px;">overall return</span>
+                    </div>
+                </div>
+
+                <!-- 2. Available Cash -->
+                <div class="metric-card">
+                    <div class="metric-header">
+                        <span class="metric-label">Available Cash</span>
+                        <span class="metric-pill">Preserved 100%</span>
+                    </div>
+                    <div class="metric-value-row">
+                        <span class="metric-value text-cyan" id="val-cash-balance">₹1,00,000.00</span>
+                    </div>
+                    <div class="metric-subtext">
+                        <span style="color:var(--text-muted);">₹20,000 per swing slot</span>
+                    </div>
+                </div>
+
+                <!-- 3. Invested Capital & Slots -->
+                <div class="metric-card">
+                    <div class="metric-header">
+                        <span class="metric-label">Invested Capital</span>
+                        <span class="metric-pill" id="val-positions-count">0 / 5 Active</span>
+                    </div>
+                    <div class="metric-value-row">
+                        <span class="metric-value" id="val-invested-capital">₹0.00</span>
+                    </div>
+                    <div class="metric-subtext">
+                        <span>Current Mkt Val: <strong id="val-positions-mkt" style="color:#fff;">₹0.00</strong></span>
+                    </div>
+                    <div class="slots-meter" id="slots-dots-container" title="5 Swing Slots Tracker">
+                        <!-- Filled by JS -->
+                    </div>
+                </div>
+
+                <!-- 4. Realized & Unrealized P&L -->
+                <div class="metric-card">
+                    <div class="metric-header">
+                        <span class="metric-label">Total Profit &amp; Loss</span>
+                        <span class="metric-pill">Swing Return</span>
+                    </div>
+                    <div class="metric-value-row">
+                        <span class="metric-value" id="val-total-pnl">₹0.00</span>
+                    </div>
+                    <div class="metric-subtext">
+                        <span>Realized: <strong id="val-realized-pnl" class="text-positive">₹0.00</strong></span>
+                        <span style="margin: 0 4px; color:var(--border-highlight);">|</span>
+                        <span>Unrealized: <strong id="val-unrealized-pnl">₹0.00</strong></span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Asset Allocation Visualizer -->
+            <section class="allocation-bar-container">
+                <div class="allocation-bar-header">
+                    <span>Portfolio 2 Asset Allocation</span>
+                    <div class="allocation-legend">
+                        <div class="legend-item"><span class="legend-dot cash" style="background:#38bdf8;"></span> Cash: <strong id="allocation-pct-cash">100%</strong></div>
+                        <div class="legend-item"><span class="legend-dot invested" style="background:#a855f7;"></span> Invested: <strong id="allocation-pct-invested">0%</strong></div>
+                    </div>
+                </div>
+                <div class="allocation-track">
+                    <div class="allocation-fill-cash" id="allocation-fill-cash" style="width: 100%; background: linear-gradient(90deg, #0284c7, #38bdf8);"></div>
+                    <div class="allocation-fill-invested" id="allocation-fill-invested" style="width: 0%; background: linear-gradient(90deg, #7c3aed, #c084fc);"></div>
+                </div>
+            </section>
+
+            <!-- Tab Navigation Bar -->
+            <div class="tab-navigation-bar" id="p2-tab-nav">
+                <div class="tab-links">
+                    <button class="tab-link active" data-tab="tab-watchlist" id="tab-btn-watchlist">
+                        🌊 Wyckoff Watchlist <span class="tab-badge" id="badge-watchlist-count">0</span>
+                    </button>
+                    <button class="tab-link" data-tab="tab-positions" id="tab-btn-positions">
+                        💼 Swing Holdings <span class="tab-badge" id="badge-positions-count">0</span>
+                    </button>
+                    <button class="tab-link" data-tab="tab-trades" id="tab-btn-trades">
+                        📜 Trade History <span class="tab-badge" id="badge-trades-count">0</span>
+                    </button>
+                    <button class="tab-link" data-tab="tab-strategy" id="tab-btn-strategy">
+                        📊 Strategy Rules &amp; Guide
+                    </button>
+                </div>
+                <div class="tab-actions">
+                    <button class="btn btn-sm btn-outline text-danger" id="btn-reset-p2" title="Reset Portfolio 2 to initial ₹1,00,000 cash">
+                        Reset P2
+                    </button>
+                </div>
+            </div>
+
+            <!-- ==========================================================================
+                 Tab 1: WYCKOFF WATCHLIST & BREAKOUT TRIGGERS
+                 ========================================================================== -->
+            <section class="tab-pane active" id="tab-watchlist">
+                <div class="card terminal-card">
+                    <div class="card-toolbar">
+                        <div class="toolbar-title">
+                            <h3>🌊 Wyckoff Swing Candidates <span class="p2-badge-pill">Portfolio 2</span></h3>
+                            <p class="section-desc">
+                                Automated Strategy: Buys <strong>strictly at confirmed breakout trigger</strong> (CMP &ge; Trigger Price with volume).
+                                Cash is preserved 100% until breakout is confirmed.
+                            </p>
+                        </div>
+                        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                            <div class="search-box-wrap">
+                                <span>🔍</span>
+                                <input type="text" id="input-search-watchlist" placeholder="Search stock or symbol...">
+                            </div>
+                            <div class="filter-group">
+                                <button class="filter-btn filter-btn-p2 active" data-filter="ALL">All Setups</button>
+                                <button class="filter-btn filter-btn-p2" data-filter="CONFIRMED">🔥 Confirmed Breakouts</button>
+                                <button class="filter-btn filter-btn-p2" data-filter="PENDING">⏳ Near Trigger</button>
+                                <button class="filter-btn filter-btn-p2 filter-rejected" data-filter="REJECTED">🛑 Stopped</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Desktop Table -->
+                    <div class="table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Stock</th>
+                                    <th>Score</th>
+                                    <th>Phase</th>
+                                    <th>Live CMP</th>
+                                    <th>Support / Resistance</th>
+                                    <th>Spring</th>
+                                    <th>SOS</th>
+                                    <th>Breakout Trigger</th>
+                                    <th>Stop-Loss (-5%)</th>
+                                    <th>Target (+20%)</th>
+                                    <th>Trigger Status</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="p2-watchlist-table-body">
+                                <tr><td colspan="12" class="table-empty">Loading Wyckoff swing candidates...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Mobile Cards List -->
+                    <div class="mobile-cards-list" id="p2-watchlist-mobile-cards"></div>
+                </div>
+            </section>
+
+            <!-- ==========================================================================
+                 Tab 2: SWING HOLDINGS (Open Positions)
+                 ========================================================================== -->
+            <section class="tab-pane" id="tab-positions" style="display:none;">
+                <div class="card terminal-card">
+                    <div class="card-toolbar">
+                        <div class="toolbar-title">
+                            <h3>💼 Active Swing Holdings <span class="p2-badge-pill">Portfolio 2</span></h3>
+                            <p class="section-desc">
+                                Wyckoff swing delivery holdings. Trailing stop activates at <strong>+5% gain</strong>.
+                                Maximum hold duration: <strong>10 trading sessions</strong>.
+                            </p>
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Stock</th>
+                                    <th>Qty</th>
+                                    <th>Buy Price</th>
+                                    <th>CMP</th>
+                                    <th>Effective SL</th>
+                                    <th>Target</th>
+                                    <th>Sessions</th>
+                                    <th>Trailing</th>
+                                    <th>P&amp;L</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="p2-positions-table-body">
+                                <tr><td colspan="10" class="table-empty">No open Wyckoff swing positions.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="mobile-cards-list" id="p2-positions-mobile-cards"></div>
+                </div>
+            </section>
+
+            <!-- ==========================================================================
+                 Tab 3: TRADE HISTORY
+                 ========================================================================== -->
+            <section class="tab-pane" id="tab-trades" style="display:none;">
+                <div class="card terminal-card">
+                    <div class="card-toolbar">
+                        <div class="toolbar-title">
+                            <h3>📜 Portfolio 2 Trade History <span class="p2-badge-pill">Wyckoff Swing</span></h3>
+                            <p class="section-desc">
+                                Complete ledger of all executed buys, target profits, and stop-loss exits for Portfolio 2.
+                            </p>
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Type</th>
+                                    <th>Stock</th>
+                                    <th>Price</th>
+                                    <th>Qty</th>
+                                    <th>Total Value</th>
+                                    <th>P&amp;L</th>
+                                    <th>Exit Reason</th>
+                                    <th>Timestamp</th>
+                                </tr>
+                            </thead>
+                            <tbody id="p2-trades-table-body">
+                                <tr><td colspan="9" class="table-empty">No Portfolio 2 trades recorded yet.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="mobile-cards-list" id="p2-trades-mobile-cards"></div>
+                </div>
+            </section>
+
+            <!-- ==========================================================================
+                 Tab 4: STRATEGY RULES & GUIDE
+                 ========================================================================== -->
+            <section class="tab-pane" id="tab-strategy" style="display:none;">
+                <div class="card terminal-card">
+                    <div class="card-toolbar">
+                        <div class="toolbar-title">
+                            <h3>📊 Wyckoff Swing Strategy Rules &amp; Mechanics</h3>
+                            <p class="section-desc">
+                                Institutional accumulation principles applied to swing delivery trades (5–10 days hold).
+                            </p>
+                        </div>
+                    </div>
+                    <div class="strategy-guide-grid">
+                        <div class="guide-card">
+                            <div class="guide-card-icon">🛡️</div>
+                            <div class="guide-card-title">1. Capital Preservation First</div>
+                            <div class="guide-card-text">
+                                Money is left 100% in safe cash until a stock confirms a high-probability breakout above its trading range resistance. No speculative bottom-fishing.
+                            </div>
+                        </div>
+                        <div class="guide-card">
+                            <div class="guide-card-icon">🌊</div>
+                            <div class="guide-card-title">2. Wyckoff Accumulation Phases</div>
+                            <div class="guide-card-text">
+                                Algorithms score stocks from 0 to 100 based on Phase A (Selling Climax), Phase B (Volume Absorption), Phase C (Spring &amp; Test), and Phase D (Sign of Strength - SOS).
+                            </div>
+                        </div>
+                        <div class="guide-card">
+                            <div class="guide-card-icon">🎯</div>
+                            <div class="guide-card-title">3. Profit Target: +20% Delivery</div>
+                            <div class="guide-card-text">
+                                Trades aim for strong 15% to 20% swing expansions within 5–10 trading sessions as institutional markup accelerates past the resistance ceiling.
+                            </div>
+                        </div>
+                        <div class="guide-card">
+                            <div class="guide-card-icon">🛑</div>
+                            <div class="guide-card-title">4. Strict -5% Stop-Loss</div>
+                            <div class="guide-card-text">
+                                Stop-loss is set tightly below the breakout pivot or support floor (maximum -5%). Capital risk per trade is strictly capped.
+                            </div>
+                        </div>
+                        <div class="guide-card">
+                            <div class="guide-card-icon">🚨</div>
+                            <div class="guide-card-title">5. Dynamic Trailing Stop (+5%)</div>
+                            <div class="guide-card-text">
+                                Once a position climbs +5%, the trailing stop activates automatically, ratcheting up to protect profits and eliminate downside risk.
+                            </div>
+                        </div>
+                        <div class="guide-card">
+                            <div class="guide-card-icon">⏰</div>
+                            <div class="guide-card-title">6. 10-Session Time Stop</div>
+                            <div class="guide-card-text">
+                                If a stock moves sideways and fails to reach target within 10 sessions, it is automatically exited to free up capital for fresh high-momentum setups.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+
+        <!-- Mobile Sticky Bottom Navigation Bar -->
+        <nav class="mobile-bottom-nav">
+            <button class="bottom-nav-item active" data-tab="tab-watchlist">
+                <span class="bottom-nav-icon">🌊</span>
+                <span>Upcoming</span>
+                <span class="bottom-badge" id="bottom-badge-watchlist">0</span>
+            </button>
+            <button class="bottom-nav-item" data-tab="tab-positions">
+                <span class="bottom-nav-icon">💼</span>
+                <span>Holdings</span>
+                <span class="bottom-badge" id="bottom-badge-positions">0</span>
+            </button>
+            <button class="bottom-nav-item" data-tab="tab-trades">
+                <span class="bottom-nav-icon">📜</span>
+                <span>History</span>
+                <span class="bottom-badge" id="bottom-badge-trades">0</span>
+            </button>
+            <button class="bottom-nav-item" data-tab="tab-strategy">
+                <span class="bottom-nav-icon">📊</span>
+                <span>Rules</span>
+            </button>
+        </nav>
+    </div>
+
+    <!-- Modals -->
+
+    <!-- Confirm Portfolio 2 Buy Order Modal -->
+    <div class="modal-overlay" id="modal-p2-confirm-buy">
+        <div class="modal-content modal-md">
+            <div class="modal-header">
+                <h3>🛡️ Confirm Portfolio 2 Buy Order</h3>
+                <button class="modal-close" id="btn-close-p2-buy">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div style="background: rgba(139, 92, 246, 0.12); border: 1px solid rgba(139, 92, 246, 0.35); border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+                    <div style="font-weight: 700; color: #c084fc; margin-bottom: 4px;">🛡️ Wyckoff Breakout Execution</div>
+                    <div style="font-size: 13px; color: #cbd5e1;">Buys are executed at or above confirmed breakout trigger. Money kept in cash remains 100% safe.</div>
+                </div>
+                <form id="p2-buy-form">
+                    <div class="form-group">
+                        <label>Stock Symbol</label>
+                        <input type="text" id="p2-buy-symbol" readonly style="font-weight: 700; color: #c084fc; font-family: var(--font-mono);">
+                        <div id="p2-buy-name" style="font-size: 12px; color: #94a3b8; margin-top: 2px;"></div>
+                    </div>
+                    <div class="form-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label>Current Market Price (₹)</label>
+                            <input type="text" id="p2-buy-price" readonly style="font-family: var(--font-mono); font-weight: 700;">
+                        </div>
+                        <div class="form-group">
+                            <label>Position Allocation (₹)</label>
+                            <input type="number" id="p2-buy-amount" value="20000" step="1000" min="1000" max="100000" style="font-family: var(--font-mono); font-weight: 700;">
+                        </div>
+                    </div>
+                    <div class="form-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label>Suggested Stop-Loss (-5%)</label>
+                            <input type="text" id="p2-buy-sl" readonly style="color: var(--danger); font-family: var(--font-mono); font-weight: 600;">
+                        </div>
+                        <div class="form-group">
+                            <label>Suggested Target (+20%)</label>
+                            <input type="text" id="p2-buy-tgt" readonly style="color: var(--success); font-family: var(--font-mono); font-weight: 600;">
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-top: 10px; padding: 12px; background: rgba(15, 22, 41, 0.8); border: 1px solid var(--border-color); border-radius: 6px;">
+                        <div style="font-size: 13px; color: #f8fafc;" id="p2-buy-calc-summary">Estimated: ~0 shares</div>
+                    </div>
+                    <div class="modal-footer" style="margin-top: 16px; display: flex; gap: 10px; justify-content: flex-end;">
+                        <button type="button" class="btn btn-outline" id="btn-cancel-p2-buy">Cancel (Keep Cash)</button>
+                        <button type="submit" class="btn p2-buy-btn" id="btn-submit-p2-buy">✅ Confirm &amp; Execute Buy</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div class="modal-overlay" id="modal-settings">
+        <div class="modal-content modal-md">
+            <div class="modal-header">
+                <h3>⚙️ Portfolio 2 Settings</h3>
+                <button class="modal-close" id="btn-close-settings">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="settings-form">
+                    <div class="form-group">
+                        <label>Initial Capital (₹)</label>
+                        <input type="number" id="input-p2-capital" value="100000" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label>Slot Allocation (₹)</label>
+                        <input type="number" id="input-p2-alloc" value="20000" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label>Target Percentage (%)</label>
+                        <input type="number" id="input-p2-tgt" value="20" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label>Stop-Loss Percentage (%)</label>
+                        <input type="number" id="input-p2-sl" value="5" readonly>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" id="btn-cancel-settings">Close</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications Container -->
+    <div id="toast-container"></div>
+
+    <script src="app_p2.js"></script>
+</body>
+</html>

@@ -32,18 +32,12 @@
                 </div>
             </div>
 
-            <!-- Portfolio 1 / Portfolio 2 Toggle -->
-            <div class="portfolio-toggle-group" id="portfolio-toggle-group">
-                <button class="portfolio-toggle-btn active" id="btn-p1" data-portfolio="1" title="Portfolio 1: 200 DMA Breakout Strategy">
-                    <span class="ptb-icon">📈</span>
-                    <span class="ptb-label">P1 <span class="ptb-sub">200 DMA</span></span>
-                </button>
-                <div class="portfolio-toggle-divider"></div>
-                <button class="portfolio-toggle-btn" id="btn-p2" data-portfolio="2" title="Portfolio 2: Wyckoff Swing Delivery (5–10 Days)">
-                    <span class="ptb-icon">🌊</span>
-                    <span class="ptb-label">P2 <span class="ptb-sub">Wyckoff</span></span>
-                </button>
-            </div>
+            <!-- Direct Link to Portfolio 2 -->
+            <a href="portfolio2.html" class="portfolio-switch-btn p2-theme-btn" title="Open Portfolio 2 (Wyckoff Swing Strategy)">
+                <span class="p-btn-icon">🌊</span>
+                <span class="p-btn-text">Portfolio 2 <small>Wyckoff Swing</small></span>
+                <span class="p-btn-arrow">&rarr;</span>
+            </a>
 
             <div class="header-status-group">
                 <div class="status-badge" id="market-status-badge">
@@ -183,28 +177,7 @@
                 </div>
             </div>
 
-            <!-- Portfolio 2 Tab Navigation Bar (hidden by default) -->
-            <div class="tab-navigation-bar" id="p2-tab-nav" style="display:none;">
-                <div class="tab-links">
-                    <button class="tab-link active" data-tab="tab-p2-watchlist" id="tab-btn-p2-watchlist">
-                        🌊 Wyckoff Candidates <span class="tab-badge" id="badge-p2-watchlist-count">0</span>
-                    </button>
-                    <button class="tab-link" data-tab="tab-p2-positions" id="tab-btn-p2-positions">
-                        💼 Swing Holdings <span class="tab-badge" id="badge-p2-positions-count">0</span>
-                    </button>
-                    <button class="tab-link" data-tab="tab-p2-trades" id="tab-btn-p2-trades">
-                        📜 P2 Trade History <span class="tab-badge" id="badge-p2-trades-count">0</span>
-                    </button>
-                </div>
-                <div class="tab-actions">
-                    <button class="btn btn-sm btn-outline" id="btn-p2-run-cycle" style="margin-right: 6px;">
-                        ⚡ Run P2 Cycle
-                    </button>
-                    <button class="btn btn-sm btn-primary" id="btn-p2-scan">
-                        🔍 Run Wyckoff Scan
-                    </button>
-                </div>
-            </div>
+
 
             <!-- ==========================================================================
                  Tab 1: UPCOMING TRADES (Breakout Watchlist with Stop/Reject)
@@ -444,117 +417,6 @@
             <!-- ==========================================================================
                  P2 Tab 1: WYCKOFF CANDIDATES
                  ========================================================================== -->
-            <section class="tab-pane p2-tab-pane" id="tab-p2-watchlist" style="display:none;">
-                <div class="card terminal-card">
-                    <div class="card-toolbar">
-                        <div class="toolbar-title">
-                            <h3>🌊 Wyckoff Swing Candidates <span class="p2-strategy-badge">Portfolio 2</span></h3>
-                            <p class="section-desc">
-                                Automated Strategy: Buys <strong>strictly at confirmed breakout trigger</strong> (breaking resistance ceiling with volume).
-                                Money is preserved 100% in cash until breakout is confirmed.
-                            </p>
-                        </div>
-                    </div>
-                    <!-- Desktop Table -->
-                    <div class="table-scroll-wrap">
-                        <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Stock</th>
-                                    <th>Score</th>
-                                    <th>Phase</th>
-                                    <th>CMP</th>
-                                    <th>Support / Resistance</th>
-                                    <th>Spring</th>
-                                    <th>SOS</th>
-                                    <th>Breakout Trigger</th>
-                                    <th>Stop-Loss</th>
-                                    <th>Target</th>
-                                    <th>Trigger Status</th>
-                                    <th>Action</th>
-                                </tr>
-                            </thead>
-                            <tbody id="p2-watchlist-table-body">
-                                <tr><td colspan="12" class="table-empty">Run Wyckoff Scan to populate candidates.</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                    <!-- Mobile Cards -->
-                    <div class="mobile-cards-container" id="p2-watchlist-mobile-cards"></div>
-                </div>
-            </section>
-
-            <!-- ==========================================================================
-                 P2 Tab 2: SWING HOLDINGS (Open Positions)
-                 ========================================================================== -->
-            <section class="tab-pane p2-tab-pane" id="tab-p2-positions" style="display:none;">
-                <div class="card terminal-card">
-                    <div class="card-toolbar">
-                        <div class="toolbar-title">
-                            <h3>💼 Active Swing Holdings <span class="p2-strategy-badge">Portfolio 2</span></h3>
-                            <p class="section-desc">
-                                Wyckoff swing delivery positions. Trailing stop activates at <strong>+5% gain</strong>.
-                                Time-stop exits after <strong>10 sessions</strong>.
-                            </p>
-                        </div>
-                    </div>
-                    <div class="table-scroll-wrap">
-                        <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Stock</th>
-                                    <th>Qty</th>
-                                    <th>Buy Price</th>
-                                    <th>CMP</th>
-                                    <th>Effective SL</th>
-                                    <th>Target</th>
-                                    <th>Sessions</th>
-                                    <th>Trailing</th>
-                                    <th>P&amp;L</th>
-                                </tr>
-                            </thead>
-                            <tbody id="p2-positions-table-body">
-                                <tr><td colspan="9" class="table-empty">No open Wyckoff swing positions.</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                    <div class="mobile-cards-container" id="p2-positions-mobile-cards"></div>
-                </div>
-            </section>
-
-            <!-- ==========================================================================
-                 P2 Tab 3: PORTFOLIO 2 TRADE HISTORY
-                 ========================================================================== -->
-            <section class="tab-pane p2-tab-pane" id="tab-p2-trades" style="display:none;">
-                <div class="card terminal-card">
-                    <div class="card-toolbar">
-                        <div class="toolbar-title">
-                            <h3>📜 Portfolio 2 Trade History <span class="p2-strategy-badge">Wyckoff Swing</span></h3>
-                        </div>
-                    </div>
-                    <div class="table-scroll-wrap">
-                        <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>#</th>
-                                    <th>Type</th>
-                                    <th>Stock</th>
-                                    <th>Price</th>
-                                    <th>Qty</th>
-                                    <th>Total Value</th>
-                                    <th>P&amp;L</th>
-                                    <th>Exit Reason</th>
-                                    <th>Timestamp</th>
-                                </tr>
-                            </thead>
-                            <tbody id="p2-trades-table-body">
-                                <tr><td colspan="9" class="table-empty">No Portfolio 2 trades recorded yet.</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </section>
-
         </main>
 
         <!-- Mobile Sticky Bottom Navigation Bar -->

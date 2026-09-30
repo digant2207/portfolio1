@@ -6,8 +6,14 @@ on:
       - main
     paths:
       - 'index.html'
+      - 'portfolio2.html'
+      - 'p2.html'
       - 'styles.css'
+      - 'styles_p2.css'
       - 'app.js'
+      - 'app_p2.js'
+      - '*.png'
+      - '*.jpg'
       - 'data/portfolio_snapshot.json'
       - 'portfolio_snapshot.json'
       - 'data/p2_snapshot.json'

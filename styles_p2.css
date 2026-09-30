@@ -1,0 +1,263 @@
+/* ==========================================================================
+   PORTFOLIO 2 - MODERN THEME SYSTEM
+   Wyckoff Swing Delivery Trading Terminal
+   Distinctive Visual Identity: Deep Obsidian + Royal Purple / Electric Violet
+   + Neon Aqua / Cyan + Champagne Gold accents
+   ========================================================================== */
+
+:root {
+    /* Base Obsidian & Indigo Slate Backgrounds */
+    --bg-base: #060810;
+    --bg-surface: #0a0e1c;
+    --bg-card: #0f1629;
+    --bg-card-hover: #151f38;
+    --bg-glass: rgba(15, 22, 41, 0.85);
+    --border-color: rgba(139, 92, 246, 0.18);
+    --border-highlight: rgba(168, 85, 247, 0.35);
+
+    /* Electric Violet & Royal Purple Accents */
+    --primary: #8b5cf6;
+    --primary-light: #c084fc;
+    --primary-glow: rgba(139, 92, 246, 0.35);
+    --purple: #a855f7;
+    --purple-bg: rgba(168, 85, 247, 0.14);
+
+    /* Neon Cyan / Aqua Highlights */
+    --cyan-neon: #38bdf8;
+    --cyan-glow: rgba(56, 189, 248, 0.28);
+    --accent: #06b6d4;
+
+    /* Status Colors */
+    --success: #10b981;
+    --success-bg: rgba(16, 185, 129, 0.12);
+    --danger: #f43f5e;
+    --danger-bg: rgba(244, 63, 94, 0.12);
+    --warning: #f59e0b;
+    --warning-bg: rgba(245, 158, 11, 0.12);
+
+    /* Text Colors */
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+
+    /* Glows & Shadows */
+    --shadow-card: 0 4px 20px -2px rgba(0, 0, 0, 0.7);
+    --shadow-glow: 0 0 25px rgba(139, 92, 246, 0.22);
+}
+
+/* Portfolio 2 Top Navigation Accent Border */
+.top-nav {
+    border-bottom: 1px solid rgba(139, 92, 246, 0.25);
+    background: rgba(8, 11, 22, 0.95);
+    box-shadow: 0 2px 18px rgba(139, 92, 246, 0.08);
+}
+
+/* Brand badge styling */
+.p2-badge-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 9px;
+    border-radius: var(--radius-full);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.25) 0%, rgba(6, 182, 212, 0.18) 100%);
+    color: #e9d5ff;
+    border: 1px solid rgba(168, 85, 247, 0.4);
+}
+
+/* Metric Cards Custom Violet Glow */
+.card-glow-p2 {
+    position: relative;
+    border-color: rgba(139, 92, 246, 0.4) !important;
+}
+
+.card-glow-p2::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #8b5cf6, #38bdf8, #a855f7);
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+
+.text-violet {
+    color: #c084fc !important;
+}
+
+/* Slot dots for Portfolio 2 (Purple gradient) */
+.slot-dot.wyckoff {
+    background: linear-gradient(135deg, #a855f7, #38bdf8);
+    box-shadow: 0 0 8px rgba(168, 85, 247, 0.7);
+}
+
+/* Active tab link indicator for P2 */
+.tab-link.active {
+    color: #e9d5ff;
+    border-bottom-color: #a855f7;
+    background: rgba(139, 92, 246, 0.08);
+}
+
+.tab-badge {
+    background: rgba(139, 92, 246, 0.2);
+    color: #c4b5fd;
+    border: 1px solid rgba(139, 92, 246, 0.35);
+}
+
+.tab-link.active .tab-badge {
+    background: #a855f7;
+    color: #ffffff;
+}
+
+/* Mobile bottom nav active color */
+.bottom-nav-item.active {
+    color: #c084fc;
+}
+
+.bottom-badge {
+    background: #a855f7;
+    color: #ffffff;
+}
+
+/* Wyckoff Phase Badges */
+.phase-badge {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+}
+
+.phase-markup {
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.phase-acc {
+    background: rgba(56, 189, 248, 0.15);
+    color: #38bdf8;
+    border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+.phase-spring {
+    background: rgba(168, 85, 247, 0.15);
+    color: #c084fc;
+    border: 1px solid rgba(168, 85, 247, 0.3);
+}
+
+/* Trigger status badge */
+.trigger-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 9px;
+    border-radius: var(--radius-full);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.trigger-confirmed {
+    background: rgba(16, 185, 129, 0.2);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.4);
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.25);
+    animation: pulseGlow 2s infinite;
+}
+
+.trigger-pending {
+    background: rgba(100, 116, 139, 0.15);
+    color: #94a3b8;
+    border: 1px solid rgba(100, 116, 139, 0.3);
+}
+
+@keyframes pulseGlow {
+    0%, 100% { box-shadow: 0 0 8px rgba(16, 185, 129, 0.2); }
+    50% { box-shadow: 0 0 16px rgba(16, 185, 129, 0.5); }
+}
+
+/* P2 Confirm Buy Button (High Contrast & Wow factor) */
+.p2-buy-btn {
+    background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+    color: #ffffff;
+    border: 1px solid rgba(16, 185, 129, 0.5);
+    font-weight: 700;
+    padding: 6px 14px;
+    font-size: 12px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: var(--transition);
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    box-shadow: 0 0 12px rgba(16, 185, 129, 0.3);
+}
+
+.p2-buy-btn:hover {
+    background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.55);
+    transform: translateY(-1px);
+}
+
+/* Stop/Reject Button */
+.p2-reject-btn {
+    background: rgba(244, 63, 94, 0.1);
+    color: #fb7185;
+    border: 1px solid rgba(244, 63, 94, 0.3);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 5px 10px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.p2-reject-btn:hover {
+    background: rgba(244, 63, 94, 0.2);
+    color: #ffffff;
+}
+
+/* Rules / Strategy guide cards */
+.strategy-guide-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+    margin-top: 14px;
+}
+
+.guide-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 18px;
+    transition: var(--transition);
+}
+
+.guide-card:hover {
+    border-color: rgba(139, 92, 246, 0.4);
+    box-shadow: var(--shadow-glow);
+}
+
+.guide-card-icon {
+    font-size: 24px;
+    margin-bottom: 8px;
+}
+
+.guide-card-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 6px;
+}
+
+.guide-card-text {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
