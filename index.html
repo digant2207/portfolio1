@@ -8,8 +8,10 @@
     <!-- Google Fonts Inter & JetBrains Mono -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
+    
+    <!-- Chart.js for Daywise Portfolio Equity Curve -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
     
     <!-- iPhone iOS Home Screen Web App & 3D Icon Support -->
     <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -65,6 +67,28 @@
                 </button>
             </div>
         </header>
+
+        <!-- Live Market Indices Bar (NIFTY 50 & SENSEX) -->
+        <div class="market-indices-strip" id="market-indices-bar">
+            <div class="index-item" id="ticker-nifty">
+                <span class="index-flag">🇮🇳</span>
+                <span class="index-name">NIFTY 50</span>
+                <span class="index-val" id="nifty-price">22,620.45</span>
+                <span class="index-chg down" id="nifty-change">-95.75 (-0.42%)</span>
+            </div>
+            <div class="index-divider"></div>
+            <div class="index-item" id="ticker-sensex">
+                <span class="index-flag">📈</span>
+                <span class="index-name">SENSEX</span>
+                <span class="index-val" id="sensex-price">72,480.29</span>
+                <span class="index-chg down" id="sensex-change">-48.78 (-0.07%)</span>
+            </div>
+            <div class="index-divider"></div>
+            <div class="index-item index-meta">
+                <span class="index-dot-pulse"></span>
+                <span id="indices-update-time">NSE &amp; BSE Live</span>
+            </div>
+        </div>
 
         <!-- Main Dashboard Container -->
         <main class="main-content">
@@ -145,6 +169,29 @@
                 <div class="allocation-track">
                     <div class="allocation-fill-cash" id="allocation-fill-cash" style="width: 100%;"></div>
                     <div class="allocation-fill-invested" id="allocation-fill-invested" style="width: 0%;"></div>
+                </div>
+            </section>
+
+            <!-- Daywise Portfolio Performance & Equity Curve Graph -->
+            <section class="chart-card" id="portfolio-chart-section">
+                <div class="chart-card-header">
+                    <div>
+                        <h3 style="font-size: 15px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 8px;">
+                            <span>📈 Daywise Portfolio Value &amp; Equity Curve</span>
+                            <span class="chart-badge-live">Day-by-Day</span>
+                        </h3>
+                        <p class="section-desc" style="margin-top: 4px;">
+                            Daily progression tracking base capital (₹1,00,000) vs realized &amp; open returns.
+                        </p>
+                    </div>
+                    <div class="chart-controls">
+                        <span class="chart-stat-pill">Base: <strong>₹1,00,000</strong></span>
+                        <span class="chart-stat-pill">Latest: <strong id="chart-latest-val" style="color:var(--cyan-neon);">₹96,085.80</strong></span>
+                        <span class="chart-stat-pill">Return: <strong id="chart-return-pct" style="color:var(--danger);">-3.91%</strong></span>
+                    </div>
+                </div>
+                <div class="chart-canvas-wrapper">
+                    <canvas id="portfolioDaywiseChart"></canvas>
                 </div>
             </section>
 

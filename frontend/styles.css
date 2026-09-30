@@ -1636,4 +1636,164 @@ input:focus, select:focus, textarea:focus {
     margin-bottom: 2px;
 }
 
+/* ==========================================================================
+   Market Indices Strip (NIFTY 50 & SENSEX)
+   ========================================================================== */
+.market-indices-strip {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 8px 20px;
+    background: rgba(12, 18, 30, 0.92);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border-color);
+    overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+.market-indices-strip::-webkit-scrollbar {
+    display: none;
+}
+
+.index-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+    font-size: 12px;
+}
+
+.index-flag {
+    font-size: 14px;
+}
+
+.index-name {
+    font-weight: 700;
+    color: var(--text-secondary);
+    letter-spacing: 0.04em;
+    font-size: 11px;
+}
+
+.index-val {
+    font-family: var(--font-mono);
+    font-weight: 800;
+    color: #ffffff;
+    font-size: 13px;
+}
+
+.index-chg {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: var(--radius-sm);
+}
+
+.index-chg.up {
+    color: #10b981;
+    background: rgba(16, 185, 129, 0.14);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.index-chg.down {
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.14);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.index-divider {
+    width: 1px;
+    height: 16px;
+    background: var(--border-color);
+    flex-shrink: 0;
+}
+
+.index-meta {
+    margin-left: auto;
+    color: var(--text-muted);
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.index-dot-pulse {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #10b981;
+    box-shadow: 0 0 6px #10b981;
+    display: inline-block;
+}
+
+/* ==========================================================================
+   Daywise Portfolio Chart Card
+   ========================================================================== */
+.chart-card {
+    margin-bottom: 22px;
+    padding: 16px 20px 20px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-card);
+}
+
+.chart-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.chart-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.chart-stat-pill {
+    font-size: 12px;
+    color: var(--text-secondary);
+    background: var(--bg-surface);
+    padding: 4px 10px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color);
+    font-family: var(--font-mono);
+}
+
+.chart-badge-live {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 2px 8px;
+    border-radius: var(--radius-full);
+    background: rgba(56, 189, 248, 0.15);
+    color: #38bdf8;
+    border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+.chart-canvas-wrapper {
+    position: relative;
+    height: 250px;
+    width: 100%;
+}
+
+@media (max-width: 640px) {
+    .market-indices-strip {
+        gap: 12px;
+        padding: 8px 12px;
+    }
+    .index-name { font-size: 10px; }
+    .index-val { font-size: 12px; }
+    .index-chg { font-size: 10px; }
+    .chart-card { padding: 12px 14px; }
+    .chart-canvas-wrapper { height: 210px !important; }
+}
+
+
 

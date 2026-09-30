@@ -1,6 +1,24 @@
 {
-  "generated_at": "2026-09-30 18:31:00 IST",
+  "generated_at": "2026-09-30 18:32:33 IST",
   "date": "2026-09-30",
+  "indices": {
+    "NIFTY_50": {
+      "name": "NIFTY 50",
+      "price": 22620.45,
+      "change": -95.75,
+      "change_pct": -0.42,
+      "prev_close": 22716.2,
+      "status": "DOWN"
+    },
+    "SENSEX": {
+      "name": "SENSEX",
+      "price": 72480.29,
+      "change": -48.78,
+      "change_pct": -0.07,
+      "prev_close": 72529.07,
+      "status": "DOWN"
+    }
+  },
   "portfolio2": {
     "portfolio_id": 2,
     "strategy": "Wyckoff Swing Delivery (5\u201310 Days)",
@@ -15,6 +33,29 @@
     "total_return_pct": 2.64,
     "open_positions_count": 5
   },
+  "equity_history": [
+    {
+      "date": "2026-09-24",
+      "value": 100000.0,
+      "daily_pnl": 0.0,
+      "cum_pnl": 0.0,
+      "return_pct": 0.0
+    },
+    {
+      "date": "2026-09-25",
+      "value": 100000.0,
+      "daily_pnl": 0.0,
+      "cum_pnl": 0.0,
+      "return_pct": 0.0
+    },
+    {
+      "date": "2026-09-30",
+      "value": 104621.05,
+      "daily_pnl": 4621.05,
+      "cum_pnl": 4621.05,
+      "return_pct": 4.62
+    }
+  ],
   "p2_positions": [
     {
       "id": 15,

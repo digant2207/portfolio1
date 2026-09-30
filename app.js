@@ -19,6 +19,8 @@ let appState = {
     marketStatus: {},
     activeUpcomingFilter: "PENDING",
     searchTerm: "",
+    indices: null,
+    equityHistory: [],
     // Portfolio 2
     p2Portfolio: {},
     p2Watchlist: [],
@@ -54,6 +56,17 @@ const el = {
     btnSyncSheets: document.getElementById("btn-sync-sheets"),
     btnOpenSettings: document.getElementById("btn-open-settings"),
     btnMobileMenu: document.getElementById("btn-mobile-menu"),
+
+    // Market Indices Ticker
+    niftyPrice: document.getElementById("nifty-price"),
+    niftyChange: document.getElementById("nifty-change"),
+    sensexPrice: document.getElementById("sensex-price"),
+    sensexChange: document.getElementById("sensex-change"),
+
+    // Daywise Chart
+    chartLatestVal: document.getElementById("chart-latest-val"),
+    chartReturnPct: document.getElementById("chart-return-pct"),
+    portfolioDaywiseChart: document.getElementById("portfolioDaywiseChart"),
 
     // Metrics
     valTotalPortfolio: document.getElementById("val-total-portfolio"),
@@ -254,16 +267,20 @@ async function refreshAllData() {
 
             // If live backend, also fetch P2 endpoints in background
             try {
-                const [p2Port, p2Pos, p2Tr, p2Wl] = await Promise.all([
+                const [p2Port, p2Pos, p2Tr, p2Wl, indRes, eqRes] = await Promise.all([
                     fetch(`${API_BASE}/api/p2/portfolio`).then(r => r.json()),
                     fetch(`${API_BASE}/api/p2/positions`).then(r => r.json()),
                     fetch(`${API_BASE}/api/p2/trades`).then(r => r.json()),
-                    fetch(`${API_BASE}/api/p2/watchlist`).then(r => r.json())
+                    fetch(`${API_BASE}/api/p2/watchlist`).then(r => r.json()),
+                    fetch(`${API_BASE}/api/indices`).then(r => r.json()).catch(() => null),
+                    fetch(`${API_BASE}/api/equity-history?portfolio_id=1`).then(r => r.json()).catch(() => null)
                 ]);
                 if (p2Port && !p2Port.detail) appState.p2Portfolio = p2Port;
                 if (Array.isArray(p2Pos)) appState.p2Positions = p2Pos;
                 if (Array.isArray(p2Tr)) appState.p2Trades = p2Tr;
                 if (Array.isArray(p2Wl)) appState.p2Watchlist = p2Wl;
+                if (indRes && !indRes.detail) appState.indices = indRes;
+                if (Array.isArray(eqRes)) appState.equityHistory = eqRes;
             } catch (_) {}
         } catch (e) {
             // Live API not available or timed out (e.g. running on GitHub Pages)
@@ -298,6 +315,8 @@ async function refreshAllData() {
                 appState.todayTrades = snap.today_trades || [];
                 appState.trades = snap.all_trades || [];
                 appState.upcomingTrades = snap.upcoming_trades || [];
+                if (snap.indices) appState.indices = snap.indices;
+                if (Array.isArray(snap.equity_history)) appState.equityHistory = snap.equity_history;
                 appState.marketStatus = {
                     market: { is_open: false, message: `Snapshot from ${snap.generated_at}` },
                     snapshot_mode: true
@@ -325,6 +344,7 @@ async function refreshAllData() {
                         if (p2snap.p2_positions) appState.p2Positions = p2snap.p2_positions;
                         if (p2snap.p2_trades)    appState.p2Trades    = p2snap.p2_trades;
                         if (p2snap.p2_watchlist) appState.p2Watchlist = p2snap.p2_watchlist;
+                        if (!appState.indices && p2snap.indices) appState.indices = p2snap.indices;
                         break;
                     }
                 } catch (_) {}
@@ -340,6 +360,8 @@ async function refreshAllData() {
     // Render components
     renderModeBadge();
     renderMarketStatus();
+    renderIndices(appState.indices);
+    renderEquityChart(appState.equityHistory);
 
     if (appState.activePortfolio === 2) {
         renderP2Metrics();
@@ -391,6 +413,238 @@ function renderMarketStatus() {
         el.marketStatusBadge.className = "status-badge closed";
         el.marketStatusText.textContent = "NSE: Market Closed";
     }
+}
+
+// Render Live Nifty 50 and Sensex Indices
+function renderIndices(indices) {
+    if (!indices) return;
+    const nifty = indices.NIFTY_50 || indices.NIFTY;
+    const sensex = indices.SENSEX;
+
+    if (nifty && el.niftyPrice && el.niftyChange) {
+        el.niftyPrice.textContent = Number(nifty.price || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const chgSign = (nifty.change >= 0) ? "+" : "";
+        const chgPctSign = (nifty.change_pct >= 0) ? "+" : "";
+        el.niftyChange.textContent = `${chgSign}${Number(nifty.change || 0).toFixed(2)} (${chgPctSign}${Number(nifty.change_pct || 0).toFixed(2)}%)`;
+        el.niftyChange.className = `index-chg ${nifty.change >= 0 ? "up" : "down"}`;
+    }
+
+    if (sensex && el.sensexPrice && el.sensexChange) {
+        el.sensexPrice.textContent = Number(sensex.price || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const chgSign = (sensex.change >= 0) ? "+" : "";
+        const chgPctSign = (sensex.change_pct >= 0) ? "+" : "";
+        el.sensexChange.textContent = `${chgSign}${Number(sensex.change || 0).toFixed(2)} (${chgPctSign}${Number(sensex.change_pct || 0).toFixed(2)}%)`;
+        el.sensexChange.className = `index-chg ${sensex.change >= 0 ? "up" : "down"}`;
+    }
+}
+
+// Daywise Equity Curve Chart with Chart.js & Canvas Fallback
+let equityChartInstance = null;
+
+function renderEquityChart(history) {
+    const canvas = document.getElementById("portfolioDaywiseChart");
+    if (!canvas) return;
+
+    let dataPoints = (Array.isArray(history) && history.length > 0) ? history : [
+        { date: "Day 1", value: 100000, daily_pnl: 0, return_pct: 0 }
+    ];
+
+    if (dataPoints.length === 1) {
+        dataPoints = [
+            { date: "Start", value: 100000, daily_pnl: 0, return_pct: 0 },
+            { date: "Latest", value: dataPoints[0].value, daily_pnl: dataPoints[0].daily_pnl || 0, return_pct: dataPoints[0].return_pct || 0 }
+        ];
+    }
+
+    const latest = dataPoints[dataPoints.length - 1];
+    const latestVal = latest ? latest.value : 100000;
+    const latestRet = latest ? (latest.return_pct || 0) : 0;
+
+    if (el.chartLatestVal) {
+        el.chartLatestVal.textContent = `₹${Number(latestVal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    }
+    if (el.chartReturnPct) {
+        const sign = latestRet >= 0 ? "+" : "";
+        el.chartReturnPct.textContent = `${sign}${Number(latestRet).toFixed(2)}%`;
+        el.chartReturnPct.style.color = latestRet >= 0 ? "var(--success)" : "var(--danger)";
+    }
+
+    const labels = dataPoints.map(p => {
+        try {
+            const d = new Date(p.date);
+            if (!isNaN(d.getTime())) {
+                return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+            }
+        } catch (_) {}
+        return p.date;
+    });
+
+    const values = dataPoints.map(p => Number(p.value));
+
+    // Try Chart.js
+    if (window.Chart) {
+        try {
+            const ctx = canvas.getContext("2d");
+            if (equityChartInstance) {
+                equityChartInstance.destroy();
+                equityChartInstance = null;
+            }
+
+            const gradient = ctx.createLinearGradient(0, 0, 0, 250);
+            gradient.addColorStop(0, "rgba(0, 242, 254, 0.35)");
+            gradient.addColorStop(0.8, "rgba(0, 242, 254, 0.04)");
+            gradient.addColorStop(1, "rgba(0, 242, 254, 0.0)");
+
+            equityChartInstance = new Chart(ctx, {
+                type: "line",
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: "Portfolio Value (₹)",
+                            data: values,
+                            borderColor: "#00f2fe",
+                            borderWidth: 2.5,
+                            backgroundColor: gradient,
+                            fill: true,
+                            tension: 0.25,
+                            pointBackgroundColor: "#00f2fe",
+                            pointBorderColor: "#0b132b",
+                            pointBorderWidth: 2,
+                            pointRadius: dataPoints.length > 20 ? 2 : 4,
+                            pointHoverRadius: 6,
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: "index",
+                        intersect: false
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: "rgba(11, 19, 43, 0.95)",
+                            titleColor: "#e2e8f0",
+                            bodyColor: "#00f2fe",
+                            borderColor: "rgba(0, 242, 254, 0.4)",
+                            borderWidth: 1,
+                            padding: 10,
+                            displayColors: false,
+                            callbacks: {
+                                label: function(context) {
+                                    const idx = context.dataIndex;
+                                    const item = dataPoints[idx] || {};
+                                    const valStr = `Value: ₹${Number(context.parsed.y).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+                                    const pnlStr = item.daily_pnl ? `Daily P&L: ₹${Number(item.daily_pnl).toFixed(2)}` : null;
+                                    const retStr = `Return: ${Number(item.return_pct || 0).toFixed(2)}%`;
+                                    return pnlStr ? [valStr, pnlStr, retStr] : [valStr, retStr];
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: "rgba(255, 255, 255, 0.05)" },
+                            ticks: { color: "#94a3b8", font: { size: 11 } }
+                        },
+                        y: {
+                            grid: { color: "rgba(255, 255, 255, 0.05)" },
+                            ticks: {
+                                color: "#94a3b8",
+                                font: { size: 11 },
+                                callback: function(val) {
+                                    return "₹" + Number(val).toLocaleString("en-IN", { maximumFractionDigits: 0 });
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            return;
+        } catch (chartErr) {
+            console.warn("Chart.js render error, falling back to canvas:", chartErr);
+        }
+    }
+
+    // Direct Canvas 2D Fallback if Chart.js is not loaded
+    renderCanvasLineChartFallback(canvas, labels, values, "#00f2fe");
+}
+
+function renderCanvasLineChartFallback(canvas, labels, values, lineColor = "#00f2fe") {
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width || 600;
+    canvas.height = rect.height || 250;
+    const w = canvas.width;
+    const h = canvas.height;
+
+    ctx.clearRect(0, 0, w, h);
+    if (!values || values.length === 0) return;
+
+    const padLeft = 70;
+    const padRight = 30;
+    const padTop = 30;
+    const padBottom = 40;
+
+    const minVal = Math.min(...values) * 0.99;
+    const maxVal = Math.max(...values) * 1.01;
+    const valRange = (maxVal - minVal) || 1;
+
+    const plotW = w - padLeft - padRight;
+    const plotH = h - padTop - padBottom;
+
+    // Grid lines
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.05)";
+    ctx.lineWidth = 1;
+    ctx.fillStyle = "#94a3b8";
+    ctx.font = "11px Inter, sans-serif";
+    for (let i = 0; i <= 4; i++) {
+        const yVal = minVal + (valRange * i) / 4;
+        const yPos = padTop + plotH - (plotH * i) / 4;
+        ctx.beginPath();
+        ctx.moveTo(padLeft, yPos);
+        ctx.lineTo(w - padRight, yPos);
+        ctx.stroke();
+        ctx.fillText("₹" + Math.round(yVal).toLocaleString("en-IN"), 10, yPos + 4);
+    }
+
+    // Draw line
+    const coords = values.map((v, i) => {
+        const x = padLeft + (i / Math.max(1, values.length - 1)) * plotW;
+        const y = padTop + plotH - ((v - minVal) / valRange) * plotH;
+        return { x, y };
+    });
+
+    ctx.beginPath();
+    coords.forEach((pt, i) => {
+        if (i === 0) ctx.moveTo(pt.x, pt.y);
+        else ctx.lineTo(pt.x, pt.y);
+    });
+    ctx.strokeStyle = lineColor;
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    // Fill
+    ctx.lineTo(coords[coords.length - 1].x, padTop + plotH);
+    ctx.lineTo(coords[0].x, padTop + plotH);
+    ctx.closePath();
+    ctx.fillStyle = "rgba(0, 242, 254, 0.08)";
+    ctx.fill();
+
+    // Points
+    coords.forEach(pt => {
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, 4, 0, Math.PI * 2);
+        ctx.fillStyle = lineColor;
+        ctx.fill();
+        ctx.strokeStyle = "#0b132b";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+    });
 }
 
 function renderMetrics() {

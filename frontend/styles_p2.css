@@ -261,3 +261,16 @@
     color: var(--text-secondary);
     line-height: 1.5;
 }
+
+/* Portfolio 2 Custom Index & Chart Accents */
+.market-indices-strip {
+    background: rgba(10, 14, 28, 0.95);
+    border-bottom: 1px solid rgba(139, 92, 246, 0.22);
+}
+
+.chart-badge-live.p2-badge {
+    background: rgba(168, 85, 247, 0.2);
+    color: #e9d5ff;
+    border: 1px solid rgba(168, 85, 247, 0.45);
+}
+

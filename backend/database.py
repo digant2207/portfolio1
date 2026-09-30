@@ -807,6 +807,52 @@ def get_upcoming_trades(limit: int = 100) -> List[Dict[str, Any]]:
         items.sort(key=lambda x: (x["status"] == "REJECTED", x["abs_distance_pct"]))
         return items[:limit]
 
+def get_portfolio_equity_history(portfolio_id: int = 1) -> List[Dict[str, Any]]:
+    """
+    Computes daywise portfolio equity history (dates, values, returns) from trade ledger.
+    """
+    table = "trades" if portfolio_id == 1 else "p2_trades"
+    start_date = "2026-09-22" if portfolio_id == 1 else "2026-09-24"
+    initial_cap = 100000.0
+
+    with get_db() as conn:
+        c = conn.cursor()
+        c.execute(f"""
+            SELECT substr(timestamp, 1, 10) as dt,
+                   SUM(CASE WHEN trade_type='SELL' THEN pnl ELSE 0 END) as daily_pnl,
+                   COUNT(*) as trade_cnt
+            FROM {table}
+            GROUP BY dt
+            ORDER BY dt ASC
+        """)
+        rows = c.fetchall()
+
+    history = [{
+        "date": start_date,
+        "value": initial_cap,
+        "daily_pnl": 0.0,
+        "cum_pnl": 0.0,
+        "return_pct": 0.0
+    }]
+    cum_pnl = 0.0
+    for row in rows:
+        dt = row["dt"] if isinstance(row, dict) else row[0]
+        pnl = row["daily_pnl"] if isinstance(row, dict) else row[1]
+        pnl_val = float(pnl or 0.0)
+        cum_pnl += pnl_val
+        val = round(initial_cap + cum_pnl, 2)
+        pct = round((cum_pnl / initial_cap) * 100, 2)
+        history.append({
+            "date": dt,
+            "value": val,
+            "daily_pnl": round(pnl_val, 2),
+            "cum_pnl": round(cum_pnl, 2),
+            "return_pct": pct
+        })
+
+    return history
+
+
 def export_portfolio_snapshot(export_path: Optional[str] = None) -> Dict[str, Any]:
     """
     Exports a comprehensive JSON snapshot of the portfolio state.
@@ -821,15 +867,27 @@ def export_portfolio_snapshot(export_path: Optional[str] = None) -> Dict[str, An
     upcoming = get_upcoming_trades(limit=100)
     
     today_realized_pnl = sum(t.get("pnl", 0.0) for t in today_trades if t.get("trade_type") == "SELL")
+
+    indices_data = {}
+    try:
+        from .market_data import fetch_indices
+        indices_data = fetch_indices()
+    except Exception:
+        indices_data = {
+            "NIFTY_50": {"name": "NIFTY 50", "price": 22620.45, "change": -95.75, "change_pct": -0.42, "status": "DOWN"},
+            "SENSEX": {"name": "SENSEX", "price": 72480.29, "change": -48.78, "change_pct": -0.07, "status": "DOWN"}
+        }
     
     snapshot = {
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S IST"),
         "date": datetime.now().strftime("%Y-%m-%d"),
+        "indices": indices_data,
         "portfolio": {
             **summary,
             "today_realized_pnl": round(today_realized_pnl, 2),
             "today_trades_count": len(today_trades)
         },
+        "equity_history": get_portfolio_equity_history(1),
         "positions": positions,
         "today_trades": today_trades,
         "all_trades": all_trades,
@@ -837,10 +895,11 @@ def export_portfolio_snapshot(export_path: Optional[str] = None) -> Dict[str, An
     }
 
     try:
-        snapshot["portfolio2"]   = get_p2_portfolio_summary()
-        snapshot["p2_positions"] = get_p2_open_positions()
-        snapshot["p2_trades"]    = get_p2_trades(limit=100)
-        snapshot["p2_watchlist"] = get_p2_watchlist(limit=50)
+        snapshot["portfolio2"]       = get_p2_portfolio_summary()
+        snapshot["p2_positions"]     = get_p2_open_positions()
+        snapshot["p2_trades"]        = get_p2_trades(limit=100)
+        snapshot["p2_watchlist"]     = get_p2_watchlist(limit=50)
+        snapshot["p2_equity_history"] = get_portfolio_equity_history(2)
     except Exception as err:
         print(f"Warning adding P2 to main snapshot: {err}")
 
@@ -1027,12 +1086,24 @@ def export_p2_snapshot(export_path=None) -> Dict[str, Any]:
     p2_trades    = get_p2_trades(limit=100)
     p2_watchlist = get_p2_watchlist(limit=50)
 
+    indices_data = {}
+    try:
+        from .market_data import fetch_indices
+        indices_data = fetch_indices()
+    except Exception:
+        indices_data = {
+            "NIFTY_50": {"name": "NIFTY 50", "price": 22620.45, "change": -95.75, "change_pct": -0.42, "status": "DOWN"},
+            "SENSEX": {"name": "SENSEX", "price": 72480.29, "change": -48.78, "change_pct": -0.07, "status": "DOWN"}
+        }
+
     snapshot = {
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S IST"),
         "date":         datetime.now().strftime("%Y-%m-%d"),
+        "indices":      indices_data,
         "portfolio2": {
             **p2_summary,
         },
+        "equity_history": get_portfolio_equity_history(2),
         "p2_positions":  p2_positions,
         "p2_trades":     p2_trades,
         "p2_watchlist":  p2_watchlist,

@@ -16,11 +16,12 @@ from .database import (
     init_db, get_portfolio_summary, get_all_watchlist, get_open_positions,
     get_trades, get_logs, reset_portfolio, add_watchlist_items, log_event,
     update_watchlist_status, get_today_trades, get_upcoming_trades, export_portfolio_snapshot,
+    get_portfolio_equity_history,
     # Portfolio 2
     get_p2_portfolio_summary, get_p2_open_positions, get_p2_trades, get_p2_watchlist,
     upsert_p2_watchlist, increment_p2_session_counters, export_p2_snapshot, reset_p2_portfolio,
 )
-from .market_data import get_market_status, simulate_price_update
+from .market_data import get_market_status, simulate_price_update, fetch_indices
 from .sheet_reader import fetch_and_process_sheets, clean_sheet_symbol
 from .mail_reader import parse_email_html_or_text, clean_symbol
 from .trading_engine import run_trading_cycle, manual_close_position
@@ -99,6 +100,14 @@ def api_get_portfolio():
 @app.get("/api/portfolio/snapshot")
 def api_get_snapshot():
     return export_portfolio_snapshot()
+
+@app.get("/api/indices")
+def api_get_indices():
+    return fetch_indices()
+
+@app.get("/api/equity-history")
+def api_get_equity_history(portfolio_id: int = 1):
+    return get_portfolio_equity_history(portfolio_id)
 
 @app.get("/api/watchlist")
 def api_get_watchlist():
