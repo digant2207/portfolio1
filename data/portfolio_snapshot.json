@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-30 18:17:58 IST",
+  "generated_at": "2026-09-30 18:31:13 IST",
   "date": "2026-09-30",
   "portfolio": {
     "initial_capital": 100000.0,
@@ -964,7 +964,7 @@
       "symbol": "SHARDAMOTR.NS",
       "section": "above_200_dma",
       "cmp_report": 957.0,
-      "dma_200": 877.61,
+      "dma_200": 877.65,
       "trigger_price": 986.0,
       "status": "PENDING",
       "current_price": 957.0,
