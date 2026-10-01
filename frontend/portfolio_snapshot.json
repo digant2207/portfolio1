@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-01 18:15:58 IST",
+  "generated_at": "2026-10-01 18:31:16 IST",
   "date": "2026-10-01",
   "indices": {
     "NIFTY_50": {
@@ -979,8 +979,8 @@
       "symbol": "JUNIPER.NS",
       "section": "above_200_dma",
       "cmp_report": 218.4,
-      "dma_200": 214.75,
-      "trigger_price": 216.9,
+      "dma_200": 214.7,
+      "trigger_price": 216.85,
       "status": "PENDING",
       "current_price": 213.87,
       "last_checked": "2026-09-29 09:45:35",
@@ -993,8 +993,8 @@
       "dma_50": 208.01,
       "volume_today": 188659.0,
       "vol_pct": 94.42,
-      "distance_pct": 1.4,
-      "abs_distance_pct": 1.4,
+      "distance_pct": 1.37,
+      "abs_distance_pct": 1.37,
       "proximity_pct": 98.6,
       "is_crossed": false,
       "est_quantity": 46,
@@ -1007,7 +1007,7 @@
       "symbol": "SHARDAMOTR.NS",
       "section": "above_200_dma",
       "cmp_report": 933.35,
-      "dma_200": 877.65,
+      "dma_200": 877.47,
       "trigger_price": 986.0,
       "status": "PENDING",
       "current_price": 926.85,
