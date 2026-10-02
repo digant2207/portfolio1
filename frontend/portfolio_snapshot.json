@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-02 10:00:36 IST",
+  "generated_at": "2026-10-02 10:16:12 IST",
   "date": "2026-10-02",
   "indices": {
     "NIFTY_50": {
@@ -959,7 +959,7 @@
       "trigger_price": 986.0,
       "status": "PENDING",
       "current_price": 933.35,
-      "last_checked": "2026-10-02 04:30:34",
+      "last_checked": "2026-10-02 04:46:11",
       "created_at": "2026-09-24 04:59:20",
       "golden_cross": 0,
       "avg_volume_1m": 75694.0,
@@ -987,7 +987,7 @@
       "trigger_price": 127.0,
       "status": "PENDING",
       "current_price": 105.98,
-      "last_checked": "2026-10-02 04:30:34",
+      "last_checked": "2026-10-02 04:46:11",
       "created_at": "2026-09-24 12:49:21",
       "golden_cross": 0,
       "avg_volume_1m": 3741019.0,
