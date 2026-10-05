@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-05 17:16:06 IST",
+  "generated_at": "2026-10-05 17:31:09 IST",
   "date": "2026-10-05",
   "indices": {
     "NIFTY_50": {
@@ -952,8 +952,8 @@
       "symbol": "PERSISTENT.NS",
       "section": "above_200_dma",
       "cmp_report": 5517.0,
-      "dma_200": 5375.95,
-      "trigger_price": 5429.71,
+      "dma_200": 5373.44,
+      "trigger_price": 5427.17,
       "status": "PENDING",
       "current_price": null,
       "last_checked": null,
@@ -963,12 +963,12 @@
       "sheet_trigger": null,
       "sheet_stop_loss": null,
       "sheet_stop_loss_raw": null,
-      "dma_50": 5489.4,
+      "dma_50": 5499.96,
       "volume_today": 768988.0,
       "vol_pct": 179.81,
-      "distance_pct": -1.61,
-      "abs_distance_pct": 1.61,
-      "proximity_pct": 101.6,
+      "distance_pct": -1.66,
+      "abs_distance_pct": 1.66,
+      "proximity_pct": 101.7,
       "is_crossed": true,
       "est_quantity": 1,
       "est_allocation": 10000.0
