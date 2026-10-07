@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-07 18:01:07 IST",
+  "generated_at": "2026-10-07 18:15:58 IST",
   "date": "2026-10-07",
   "indices": {
     "NIFTY_50": {
@@ -1163,8 +1163,8 @@
       "symbol": "TRACXN.NS",
       "section": "above_200_dma",
       "cmp_report": 34.18,
-      "dma_200": 32.75,
-      "trigger_price": 33.08,
+      "dma_200": 32.72,
+      "trigger_price": 33.05,
       "status": "PENDING",
       "current_price": 31.66,
       "last_checked": "2026-10-01 09:45:33",
@@ -1177,9 +1177,9 @@
       "dma_50": 30.52,
       "volume_today": 357771.0,
       "vol_pct": 132.83,
-      "distance_pct": 4.29,
-      "abs_distance_pct": 4.29,
-      "proximity_pct": 95.7,
+      "distance_pct": 4.21,
+      "abs_distance_pct": 4.21,
+      "proximity_pct": 95.8,
       "is_crossed": false,
       "est_quantity": 315,
       "est_allocation": 10000.0
@@ -1230,7 +1230,7 @@
       "sheet_trigger": 127.0,
       "sheet_stop_loss": null,
       "sheet_stop_loss_raw": null,
-      "dma_50": 119.93,
+      "dma_50": 119.51,
       "volume_today": 7531830.0,
       "vol_pct": 209.0,
       "distance_pct": 16.65,
