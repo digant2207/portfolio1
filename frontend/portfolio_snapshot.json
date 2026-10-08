@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-08 18:16:02 IST",
+  "generated_at": "2026-10-08 18:31:15 IST",
   "date": "2026-10-08",
   "indices": {
     "NIFTY_50": {
@@ -1252,7 +1252,7 @@
       "symbol": "SHARDAMOTR.NS",
       "section": "above_200_dma",
       "cmp_report": 881.15,
-      "dma_200": 876.96,
+      "dma_200": 876.63,
       "trigger_price": 986.0,
       "status": "PENDING",
       "current_price": 885.1,
