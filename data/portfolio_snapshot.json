@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-09 17:15:50 IST",
+  "generated_at": "2026-10-09 17:31:10 IST",
   "date": "2026-10-09",
   "indices": {
     "NIFTY_50": {
@@ -1362,7 +1362,7 @@
     {
       "id": 804,
       "report_date": "2026-10-09",
-      "stock_name": "IEX",
+      "stock_name": "Indian Energy Exchange Ltd",
       "symbol": "IEX.NS",
       "section": "above_200_dma",
       "cmp_report": 104.72,
