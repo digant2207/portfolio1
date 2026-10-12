@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-12 17:16:08 IST",
+  "generated_at": "2026-10-12 17:31:20 IST",
   "date": "2026-10-12",
   "indices": {
     "NIFTY_50": {
@@ -1313,7 +1313,7 @@
       "symbol": "IEX.NS",
       "section": "above_200_dma",
       "cmp_report": 104.37,
-      "dma_200": 124.88,
+      "dma_200": 124.7,
       "trigger_price": 127.0,
       "status": "PENDING",
       "current_price": 104.3,
