@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-12 18:31:16 IST",
+  "generated_at": "2026-10-12 18:45:53 IST",
   "date": "2026-10-12",
   "indices": {
     "NIFTY_50": {
@@ -1212,7 +1212,7 @@
       "sheet_trigger": null,
       "sheet_stop_loss": null,
       "sheet_stop_loss_raw": null,
-      "dma_50": 367.17,
+      "dma_50": 367.58,
       "volume_today": 312580.0,
       "vol_pct": 302.94,
       "distance_pct": 0.41,
