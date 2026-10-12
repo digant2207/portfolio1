@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-12 17:31:20 IST",
+  "generated_at": "2026-10-12 17:45:55 IST",
   "date": "2026-10-12",
   "indices": {
     "NIFTY_50": {
@@ -1296,7 +1296,7 @@
       "sheet_trigger": 986.0,
       "sheet_stop_loss": null,
       "sheet_stop_loss_raw": null,
-      "dma_50": 915.17,
+      "dma_50": 916.06,
       "volume_today": 51564.0,
       "vol_pct": 69.37,
       "distance_pct": 8.75,
@@ -1313,7 +1313,7 @@
       "symbol": "IEX.NS",
       "section": "above_200_dma",
       "cmp_report": 104.37,
-      "dma_200": 124.7,
+      "dma_200": 124.88,
       "trigger_price": 127.0,
       "status": "PENDING",
       "current_price": 104.3,
