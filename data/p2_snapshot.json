@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-13 17:46:04 IST",
+  "generated_at": "2026-10-13 18:01:15 IST",
   "date": "2026-10-13",
   "indices": {
     "NIFTY_50": {
@@ -721,6 +721,35 @@
       "current_price": null,
       "last_checked": null,
       "created_at": "2026-09-25 06:25:03"
+    },
+    {
+      "id": 67,
+      "report_date": "2026-10-13",
+      "stock_name": "ONMOBILE.NS",
+      "symbol": "ONMOBILE.NS",
+      "cmp_report": 55.0,
+      "wyckoff_score": 77.5,
+      "phase_label": "PHASE_C_SPRING",
+      "support": 46.99,
+      "resistance": 53.8,
+      "range_width_pct": 14.49,
+      "absorption_score": 17.5,
+      "demand_score": 10.0,
+      "spring_detected": 1,
+      "spring_low": 46.28,
+      "sos_detected": 1,
+      "sos_candle_date": "2026-10-13",
+      "avg_volume_20d": 65719.0,
+      "ema_10": 51.28,
+      "entry_price": 55.0,
+      "suggested_stop_loss": 52.25,
+      "sl_pct": 5.0,
+      "suggested_target": 61.05,
+      "target_pct": 11.0,
+      "status": "PENDING",
+      "current_price": null,
+      "last_checked": null,
+      "created_at": "2026-10-13 12:31:15"
     },
     {
       "id": 58,
@@ -1939,35 +1968,6 @@
       "current_price": null,
       "last_checked": null,
       "created_at": "2026-09-25 06:25:03"
-    },
-    {
-      "id": 35,
-      "report_date": "2026-10-09",
-      "stock_name": "SUDARSCHEM.NS",
-      "symbol": "SUDARSCHEM.NS",
-      "cmp_report": 1166.800048828125,
-      "wyckoff_score": 61.25,
-      "phase_label": "PHASE_C_SPRING",
-      "support": 1170.0,
-      "resistance": 1278.0,
-      "range_width_pct": 9.23,
-      "absorption_score": 18.75,
-      "demand_score": 12.5,
-      "spring_detected": 1,
-      "spring_low": 1148.1,
-      "sos_detected": 0,
-      "sos_candle_date": "",
-      "avg_volume_20d": 224351.0,
-      "ema_10": 1207.61,
-      "entry_price": 1284.39,
-      "suggested_stop_loss": 1220.17,
-      "sl_pct": 5.0,
-      "suggested_target": 1387.14,
-      "target_pct": 8.0,
-      "status": "PENDING",
-      "current_price": null,
-      "last_checked": null,
-      "created_at": "2026-09-25 11:31:09"
     }
   ]
 }
