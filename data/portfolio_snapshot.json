@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-15 17:31:17 IST",
+  "generated_at": "2026-10-15 17:45:58 IST",
   "date": "2026-10-15",
   "indices": {
     "NIFTY_50": {
@@ -1497,7 +1497,7 @@
       "sheet_trigger": null,
       "sheet_stop_loss": null,
       "sheet_stop_loss_raw": null,
-      "dma_50": 1285.51,
+      "dma_50": 1285.31,
       "volume_today": 8001609.0,
       "vol_pct": 198.97,
       "distance_pct": -0.61,
@@ -1525,7 +1525,7 @@
       "sheet_trigger": null,
       "sheet_stop_loss": null,
       "sheet_stop_loss_raw": null,
-      "dma_50": 1243.44,
+      "dma_50": 1243.96,
       "volume_today": 8794655.0,
       "vol_pct": 138.62,
       "distance_pct": 0.71,
@@ -1570,8 +1570,8 @@
       "symbol": "NUVOCO.NS",
       "section": "above_200_dma",
       "cmp_report": 335.1,
-      "dma_200": 326.68,
-      "trigger_price": 329.95,
+      "dma_200": 326.54,
+      "trigger_price": 329.81,
       "status": "PENDING",
       "current_price": 335.0,
       "last_checked": "2026-09-24 12:54:10",
@@ -1584,9 +1584,9 @@
       "dma_50": 329.64,
       "volume_today": 735467.0,
       "vol_pct": 245.06,
-      "distance_pct": -1.53,
-      "abs_distance_pct": 1.53,
-      "proximity_pct": 101.5,
+      "distance_pct": -1.57,
+      "abs_distance_pct": 1.57,
+      "proximity_pct": 101.6,
       "is_crossed": true,
       "est_quantity": 29,
       "est_allocation": 10000.0
