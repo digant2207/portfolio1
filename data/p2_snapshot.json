@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-15 17:01:14 IST",
+  "generated_at": "2026-10-15 17:16:05 IST",
   "date": "2026-10-15",
   "indices": {
     "NIFTY_50": {
@@ -780,6 +780,35 @@
       "current_price": null,
       "last_checked": null,
       "created_at": "2026-09-25 06:25:03"
+    },
+    {
+      "id": 75,
+      "report_date": "2026-10-15",
+      "stock_name": "HCLTECH.NS",
+      "symbol": "HCLTECH.NS",
+      "cmp_report": 1360.0,
+      "wyckoff_score": 79.04,
+      "phase_label": "PHASE_C_SPRING",
+      "support": 1188.2,
+      "resistance": 1331.4,
+      "range_width_pct": 12.05,
+      "absorption_score": 22.22,
+      "demand_score": 6.82,
+      "spring_detected": 1,
+      "spring_low": 1188.2,
+      "sos_detected": 1,
+      "sos_candle_date": "2026-10-13",
+      "avg_volume_20d": 4247959.0,
+      "ema_10": 1272.52,
+      "entry_price": 1360.0,
+      "suggested_stop_loss": 1292.0,
+      "sl_pct": 5.0,
+      "suggested_target": 1509.6,
+      "target_pct": 11.0,
+      "status": "PENDING",
+      "current_price": null,
+      "last_checked": null,
+      "created_at": "2026-10-15 11:46:05"
     },
     {
       "id": 39,
@@ -1998,35 +2027,6 @@
       "current_price": null,
       "last_checked": null,
       "created_at": "2026-10-15 11:31:14"
-    },
-    {
-      "id": 35,
-      "report_date": "2026-10-15",
-      "stock_name": "SUDARSCHEM.NS",
-      "symbol": "SUDARSCHEM.NS",
-      "cmp_report": 1144.5999755859375,
-      "wyckoff_score": 62.14,
-      "phase_label": "PHASE_C_SPRING",
-      "support": 1143.6,
-      "resistance": 1277.5,
-      "range_width_pct": 11.71,
-      "absorption_score": 19.64,
-      "demand_score": 12.5,
-      "spring_detected": 1,
-      "spring_low": 1143.6,
-      "sos_detected": 0,
-      "sos_candle_date": "",
-      "avg_volume_20d": 220732.0,
-      "ema_10": 1173.83,
-      "entry_price": 1283.89,
-      "suggested_stop_loss": 1219.7,
-      "sl_pct": 5.0,
-      "suggested_target": 1386.6,
-      "target_pct": 8.0,
-      "status": "PENDING",
-      "current_price": null,
-      "last_checked": null,
-      "created_at": "2026-09-25 11:31:09"
     }
   ]
 }
