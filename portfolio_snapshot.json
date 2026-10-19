@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-19 18:15:58 IST",
+  "generated_at": "2026-10-19 18:31:11 IST",
   "date": "2026-10-19",
   "indices": {
     "NIFTY_50": {
@@ -1779,8 +1779,8 @@
       "symbol": "HMAAGRO.NS",
       "section": "above_200_dma",
       "cmp_report": 24.68,
-      "dma_200": 23.99,
-      "trigger_price": 24.23,
+      "dma_200": 23.97,
+      "trigger_price": 24.21,
       "status": "PENDING",
       "current_price": 23.18,
       "last_checked": "2026-09-24 05:15:54",
@@ -1793,8 +1793,8 @@
       "dma_50": 22.63,
       "volume_today": 2369113.0,
       "vol_pct": 104.22,
-      "distance_pct": 4.33,
-      "abs_distance_pct": 4.33,
+      "distance_pct": 4.25,
+      "abs_distance_pct": 4.25,
       "proximity_pct": 95.7,
       "is_crossed": false,
       "est_quantity": 431,
