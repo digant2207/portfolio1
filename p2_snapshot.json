@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-20 15:15:29 IST",
+  "generated_at": "2026-10-20 17:01:09 IST",
   "date": "2026-10-20",
   "indices": {
     "NIFTY_50": {
@@ -646,7 +646,7 @@
   "p2_watchlist": [
     {
       "id": 74,
-      "report_date": "2026-10-19",
+      "report_date": "2026-10-20",
       "stock_name": "MASTEK.NS",
       "symbol": "MASTEK.NS",
       "cmp_report": 1808.4000244140625,
@@ -675,7 +675,7 @@
     },
     {
       "id": 69,
-      "report_date": "2026-10-19",
+      "report_date": "2026-10-20",
       "stock_name": "LTTS.NS",
       "symbol": "LTTS.NS",
       "cmp_report": 3611.300048828125,
@@ -704,7 +704,7 @@
     },
     {
       "id": 65,
-      "report_date": "2026-10-19",
+      "report_date": "2026-10-20",
       "stock_name": "MPHASIS.NS",
       "symbol": "MPHASIS.NS",
       "cmp_report": 2500.0,
@@ -733,7 +733,7 @@
     },
     {
       "id": 57,
-      "report_date": "2026-10-19",
+      "report_date": "2026-10-20",
       "stock_name": "AMNPLST.NS",
       "symbol": "AMNPLST.NS",
       "cmp_report": 160.38999938964844,
@@ -762,7 +762,7 @@
     },
     {
       "id": 1,
-      "report_date": "2026-10-19",
+      "report_date": "2026-10-20",
       "stock_name": "WINDMACHIN.NS",
       "symbol": "WINDMACHIN.NS",
       "cmp_report": 285.95001220703125,
@@ -791,7 +791,7 @@
     },
     {
       "id": 70,
-      "report_date": "2026-10-19",
+      "report_date": "2026-10-20",
       "stock_name": "ICICIBANK.NS",
       "symbol": "ICICIBANK.NS",
       "cmp_report": 1381.0,
@@ -806,7 +806,7 @@
       "spring_low": 1300.0,
       "sos_detected": 1,
       "sos_candle_date": "2026-10-15",
-      "avg_volume_20d": 11101276.0,
+      "avg_volume_20d": 11101290.0,
       "ema_10": 1363.72,
       "entry_price": 1409.51,
       "suggested_stop_loss": 1339.03,
@@ -820,7 +820,7 @@
     },
     {
       "id": 71,
-      "report_date": "2026-10-19",
+      "report_date": "2026-10-20",
       "stock_name": "TECHM.NS",
       "symbol": "TECHM.NS",
       "cmp_report": 1779.0999755859375,
@@ -835,7 +835,7 @@
       "spring_low": 1486.2,
       "sos_detected": 1,
       "sos_candle_date": "2026-10-16",
-      "avg_volume_20d": 3533318.0,
+      "avg_volume_20d": 3533343.0,
       "ema_10": 1626.82,
       "entry_price": 1779.1,
       "suggested_stop_loss": 1690.14,
@@ -849,7 +849,7 @@
     },
     {
       "id": 75,
-      "report_date": "2026-10-19",
+      "report_date": "2026-10-20",
       "stock_name": "HCLTECH.NS",
       "symbol": "HCLTECH.NS",
       "cmp_report": 1379.9000244140625,
@@ -864,7 +864,7 @@
       "spring_low": 1177.72,
       "sos_detected": 1,
       "sos_candle_date": "2026-10-13",
-      "avg_volume_20d": 4562548.0,
+      "avg_volume_20d": 4562634.0,
       "ema_10": 1300.52,
       "entry_price": 1379.9,
       "suggested_stop_loss": 1310.9,
@@ -936,7 +936,7 @@
     },
     {
       "id": 39,
-      "report_date": "2026-10-19",
+      "report_date": "2026-10-20",
       "stock_name": "STERTOOLS.NS",
       "symbol": "STERTOOLS.NS",
       "cmp_report": 214.11000061035156,
@@ -965,7 +965,7 @@
     },
     {
       "id": 53,
-      "report_date": "2026-10-19",
+      "report_date": "2026-10-20",
       "stock_name": "UNIVCABLES.NS",
       "symbol": "UNIVCABLES.NS",
       "cmp_report": 1460.4000244140625,
@@ -994,7 +994,7 @@
     },
     {
       "id": 78,
-      "report_date": "2026-10-19",
+      "report_date": "2026-10-20",
       "stock_name": "BHARTIARTL.NS",
       "symbol": "BHARTIARTL.NS",
       "cmp_report": 1875.199951171875,
@@ -1009,7 +1009,7 @@
       "spring_low": 1726.3,
       "sos_detected": 1,
       "sos_candle_date": "2026-10-16",
-      "avg_volume_20d": 7636587.0,
+      "avg_volume_20d": 7636616.0,
       "ema_10": 1834.59,
       "entry_price": 1875.2,
       "suggested_stop_loss": 1781.44,
@@ -1052,7 +1052,7 @@
     },
     {
       "id": 66,
-      "report_date": "2026-10-19",
+      "report_date": "2026-10-20",
       "stock_name": "TANLA.NS",
       "symbol": "TANLA.NS",
       "cmp_report": 552.3499755859375,
@@ -1067,7 +1067,7 @@
       "spring_low": 483.75,
       "sos_detected": 1,
       "sos_candle_date": "2026-10-14",
-      "avg_volume_20d": 521792.0,
+      "avg_volume_20d": 521798.0,
       "ema_10": 532.24,
       "entry_price": 552.35,
       "suggested_stop_loss": 524.73,
@@ -1081,7 +1081,7 @@
     },
     {
       "id": 60,
-      "report_date": "2026-10-19",
+      "report_date": "2026-10-20",
       "stock_name": "PERSISTENT.NS",
       "symbol": "PERSISTENT.NS",
       "cmp_report": 5690.0,
@@ -1096,7 +1096,7 @@
       "spring_low": 5188.0,
       "sos_detected": 1,
       "sos_candle_date": "2026-10-13",
-      "avg_volume_20d": 639281.0,
+      "avg_volume_20d": 639286.0,
       "ema_10": 5707.34,
       "entry_price": 5859.15,
       "suggested_stop_loss": 5566.19,
@@ -1139,7 +1139,7 @@
     },
     {
       "id": 67,
-      "report_date": "2026-10-19",
+      "report_date": "2026-10-20",
       "stock_name": "ONMOBILE.NS",
       "symbol": "ONMOBILE.NS",
       "cmp_report": 61.18000030517578,
@@ -1154,7 +1154,7 @@
       "spring_low": 46.28,
       "sos_detected": 1,
       "sos_candle_date": "2026-10-16",
-      "avg_volume_20d": 127443.0,
+      "avg_volume_20d": 127453.0,
       "ema_10": 56.11,
       "entry_price": 61.18,
       "suggested_stop_loss": 58.12,
@@ -1197,7 +1197,7 @@
     },
     {
       "id": 59,
-      "report_date": "2026-10-19",
+      "report_date": "2026-10-20",
       "stock_name": "SOTL.NS",
       "symbol": "SOTL.NS",
       "cmp_report": 699.6500244140625,
@@ -1212,7 +1212,7 @@
       "spring_low": 670.0,
       "sos_detected": 1,
       "sos_candle_date": "2026-10-07",
-      "avg_volume_20d": 364158.0,
+      "avg_volume_20d": 364165.0,
       "ema_10": 737.34,
       "entry_price": 792.94,
       "suggested_stop_loss": 753.29,
@@ -1226,7 +1226,7 @@
     },
     {
       "id": 32,
-      "report_date": "2026-10-19",
+      "report_date": "2026-10-20",
       "stock_name": "RAIN.NS",
       "symbol": "RAIN.NS",
       "cmp_report": 224.08999633789062,
@@ -1241,7 +1241,7 @@
       "spring_low": 197.0,
       "sos_detected": 1,
       "sos_candle_date": "2026-10-14",
-      "avg_volume_20d": 3939261.0,
+      "avg_volume_20d": 3939440.0,
       "ema_10": 222.22,
       "entry_price": 229.8,
       "suggested_stop_loss": 218.31,
@@ -1342,7 +1342,7 @@
     },
     {
       "id": 7,
-      "report_date": "2026-10-19",
+      "report_date": "2026-10-20",
       "stock_name": "VENKEYS.NS",
       "symbol": "VENKEYS.NS",
       "cmp_report": 1725.9000244140625,
@@ -1357,7 +1357,7 @@
       "spring_low": 1571.1,
       "sos_detected": 0,
       "sos_candle_date": "",
-      "avg_volume_20d": 56669.0,
+      "avg_volume_20d": 56670.0,
       "ema_10": 1665.12,
       "entry_price": 1748.1,
       "suggested_stop_loss": 1660.69,
@@ -1458,7 +1458,7 @@
     },
     {
       "id": 73,
-      "report_date": "2026-10-19",
+      "report_date": "2026-10-20",
       "stock_name": "PRINCEPIPE.NS",
       "symbol": "PRINCEPIPE.NS",
       "cmp_report": 277.25,
@@ -1487,7 +1487,7 @@
     },
     {
       "id": 48,
-      "report_date": "2026-10-19",
+      "report_date": "2026-10-20",
       "stock_name": "TEXINFRA.NS",
       "symbol": "TEXINFRA.NS",
       "cmp_report": 128.27000427246094,
@@ -1661,7 +1661,7 @@
     },
     {
       "id": 37,
-      "report_date": "2026-10-19",
+      "report_date": "2026-10-20",
       "stock_name": "RADICO.NS",
       "symbol": "RADICO.NS",
       "cmp_report": 4435.5,
@@ -1690,7 +1690,7 @@
     },
     {
       "id": 81,
-      "report_date": "2026-10-19",
+      "report_date": "2026-10-20",
       "stock_name": "SAREGAMA.NS",
       "symbol": "SAREGAMA.NS",
       "cmp_report": 510.1499938964844,
@@ -1719,7 +1719,7 @@
     },
     {
       "id": 4,
-      "report_date": "2026-10-19",
+      "report_date": "2026-10-20",
       "stock_name": "VMART.NS",
       "symbol": "VMART.NS",
       "cmp_report": 780.2999877929688,
@@ -1777,7 +1777,7 @@
     },
     {
       "id": 35,
-      "report_date": "2026-10-19",
+      "report_date": "2026-10-20",
       "stock_name": "SUDARSCHEM.NS",
       "symbol": "SUDARSCHEM.NS",
       "cmp_report": 1121.699951171875,
@@ -1806,7 +1806,7 @@
     },
     {
       "id": 63,
-      "report_date": "2026-10-19",
+      "report_date": "2026-10-20",
       "stock_name": "STARHEALTH.NS",
       "symbol": "STARHEALTH.NS",
       "cmp_report": 542.0499877929688,
@@ -1821,7 +1821,7 @@
       "spring_low": 531.05,
       "sos_detected": 0,
       "sos_candle_date": "",
-      "avg_volume_20d": 972950.0,
+      "avg_volume_20d": 972953.0,
       "ema_10": 549.73,
       "entry_price": 576.77,
       "suggested_stop_loss": 547.93,
@@ -1893,7 +1893,7 @@
     },
     {
       "id": 17,
-      "report_date": "2026-10-19",
+      "report_date": "2026-10-20",
       "stock_name": "SIGMAADV.NS",
       "symbol": "SIGMAADV.NS",
       "cmp_report": 911.0999755859375,
@@ -1908,7 +1908,7 @@
       "spring_low": 752.55,
       "sos_detected": 0,
       "sos_candle_date": "",
-      "avg_volume_20d": 358079.0,
+      "avg_volume_20d": 358092.0,
       "ema_10": 973.68,
       "entry_price": 1082.28,
       "suggested_stop_loss": 1028.17,
@@ -1951,7 +1951,7 @@
     },
     {
       "id": 41,
-      "report_date": "2026-10-19",
+      "report_date": "2026-10-20",
       "stock_name": "PRECWIRE.NS",
       "symbol": "PRECWIRE.NS",
       "cmp_report": 430.1000061035156,
@@ -2038,7 +2038,7 @@
     },
     {
       "id": 76,
-      "report_date": "2026-10-19",
+      "report_date": "2026-10-20",
       "stock_name": "KIOCL.NS",
       "symbol": "KIOCL.NS",
       "cmp_report": 351.0,
