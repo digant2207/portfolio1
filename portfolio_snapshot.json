@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-22 18:15:59 IST",
+  "generated_at": "2026-10-22 18:31:25 IST",
   "date": "2026-10-22",
   "indices": {
     "NIFTY_50": {
@@ -1680,8 +1680,8 @@
       "symbol": "MICEL.NS",
       "section": "above_200_dma",
       "cmp_report": 39.5,
-      "dma_200": 38.93,
-      "trigger_price": 39.32,
+      "dma_200": 38.91,
+      "trigger_price": 39.3,
       "status": "PENDING",
       "current_price": null,
       "last_checked": null,
@@ -1694,8 +1694,8 @@
       "dma_50": 36.08,
       "volume_today": 673663.0,
       "vol_pct": 340.16,
-      "distance_pct": -0.46,
-      "abs_distance_pct": 0.46,
+      "distance_pct": -0.51,
+      "abs_distance_pct": 0.51,
       "proximity_pct": 100.5,
       "is_crossed": true,
       "est_quantity": 253,
@@ -1803,7 +1803,7 @@
       "sheet_trigger": 986.0,
       "sheet_stop_loss": null,
       "sheet_stop_loss_raw": null,
-      "dma_50": 912.4,
+      "dma_50": 909.99,
       "volume_today": 33809.0,
       "vol_pct": 62.68,
       "distance_pct": 15.26,
