@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-23 18:16:01 IST",
+  "generated_at": "2026-10-23 18:31:21 IST",
   "date": "2026-10-23",
   "indices": {
     "NIFTY_50": {
@@ -1636,7 +1636,7 @@
       "sheet_trigger": null,
       "sheet_stop_loss": null,
       "sheet_stop_loss_raw": null,
-      "dma_50": 1688.64,
+      "dma_50": 1687.62,
       "volume_today": 105757.0,
       "vol_pct": 101.47,
       "distance_pct": -1.01,
@@ -1692,7 +1692,7 @@
       "sheet_trigger": 986.0,
       "sheet_stop_loss": null,
       "sheet_stop_loss_raw": null,
-      "dma_50": 909.99,
+      "dma_50": 908.69,
       "volume_today": 47974.0,
       "vol_pct": 96.99,
       "distance_pct": 17.56,
