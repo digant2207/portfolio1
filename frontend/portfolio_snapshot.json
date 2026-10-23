@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-23 18:31:21 IST",
+  "generated_at": "2026-10-23 18:46:06 IST",
   "date": "2026-10-23",
   "indices": {
     "NIFTY_50": {
@@ -1653,8 +1653,8 @@
       "symbol": "CASTROLIND.NS",
       "section": "above_200_dma",
       "cmp_report": 194.3,
-      "dma_200": 186.52,
-      "trigger_price": 188.39,
+      "dma_200": 186.55,
+      "trigger_price": 188.42,
       "status": "PENDING",
       "current_price": 194.92,
       "last_checked": "2026-09-24 05:15:54",
@@ -1667,9 +1667,9 @@
       "dma_50": 192.13,
       "volume_today": 2610511.0,
       "vol_pct": 83.3,
-      "distance_pct": -3.47,
-      "abs_distance_pct": 3.47,
-      "proximity_pct": 103.5,
+      "distance_pct": -3.45,
+      "abs_distance_pct": 3.45,
+      "proximity_pct": 103.4,
       "is_crossed": true,
       "est_quantity": 51,
       "est_allocation": 10000.0
