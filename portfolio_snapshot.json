@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-27 17:01:16 IST",
+  "generated_at": "2026-10-27 17:16:04 IST",
   "date": "2026-10-27",
   "indices": {
     "NIFTY_50": {
@@ -1729,8 +1729,8 @@
       "symbol": "BBL.NS",
       "section": "above_200_dma",
       "cmp_report": 2570.0,
-      "dma_200": 2533.19,
-      "trigger_price": 2558.52,
+      "dma_200": 2532.74,
+      "trigger_price": 2558.07,
       "status": "PENDING",
       "current_price": null,
       "last_checked": null,
@@ -1740,12 +1740,12 @@
       "sheet_trigger": null,
       "sheet_stop_loss": null,
       "sheet_stop_loss_raw": null,
-      "dma_50": 2262.16,
+      "dma_50": 2267.75,
       "volume_today": 654123.0,
       "vol_pct": 1787.87,
-      "distance_pct": -0.45,
-      "abs_distance_pct": 0.45,
-      "proximity_pct": 100.4,
+      "distance_pct": -0.47,
+      "abs_distance_pct": 0.47,
+      "proximity_pct": 100.5,
       "is_crossed": true,
       "est_quantity": 3,
       "est_allocation": 10000.0
