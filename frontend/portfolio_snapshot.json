@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-30 18:16:01 IST",
+  "generated_at": "2026-10-30 18:31:11 IST",
   "date": "2026-10-30",
   "indices": {
     "NIFTY_50": {
@@ -1842,8 +1842,8 @@
       "symbol": "WIPRO.NS",
       "section": "above_200_dma",
       "cmp_report": 198.31,
-      "dma_200": 193.89,
-      "trigger_price": 195.83,
+      "dma_200": 193.55,
+      "trigger_price": 195.49,
       "status": "PENDING",
       "current_price": null,
       "last_checked": null,
@@ -1856,9 +1856,9 @@
       "dma_50": 173.45,
       "volume_today": 28869751.0,
       "vol_pct": 124.32,
-      "distance_pct": -1.27,
-      "abs_distance_pct": 1.27,
-      "proximity_pct": 101.3,
+      "distance_pct": -1.44,
+      "abs_distance_pct": 1.44,
+      "proximity_pct": 101.4,
       "is_crossed": true,
       "est_quantity": 50,
       "est_allocation": 10000.0
