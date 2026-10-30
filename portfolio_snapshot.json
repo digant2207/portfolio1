@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-30 17:15:52 IST",
+  "generated_at": "2026-10-30 17:31:10 IST",
   "date": "2026-10-30",
   "indices": {
     "NIFTY_50": {
@@ -1769,7 +1769,7 @@
       "sheet_trigger": null,
       "sheet_stop_loss": null,
       "sheet_stop_loss_raw": null,
-      "dma_50": 74.67,
+      "dma_50": 74.69,
       "volume_today": 15095474.0,
       "vol_pct": 155.22,
       "distance_pct": 0.51,
@@ -1814,8 +1814,8 @@
       "symbol": "INDIANB.NS",
       "section": "above_200_dma",
       "cmp_report": 865.5,
-      "dma_200": 864.91,
-      "trigger_price": 873.56,
+      "dma_200": 864.93,
+      "trigger_price": 873.58,
       "status": "PENDING",
       "current_price": null,
       "last_checked": null,
@@ -1881,7 +1881,7 @@
       "sheet_trigger": 127.0,
       "sheet_stop_loss": null,
       "sheet_stop_loss_raw": null,
-      "dma_50": 112.39,
+      "dma_50": 111.92,
       "volume_today": 5008331.0,
       "vol_pct": 133.2,
       "distance_pct": 20.16,
