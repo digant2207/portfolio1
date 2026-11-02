@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-02 17:16:07 IST",
+  "generated_at": "2026-11-02 17:27:58 IST",
   "date": "2026-11-02",
   "indices": {
     "NIFTY_50": {
@@ -1832,7 +1832,7 @@
       "sheet_trigger": null,
       "sheet_stop_loss": null,
       "sheet_stop_loss_raw": null,
-      "dma_50": 1702.32,
+      "dma_50": 1704.23,
       "volume_today": 318672.0,
       "vol_pct": 57.83,
       "distance_pct": -0.47,
@@ -1996,13 +1996,13 @@
       "last_checked": "2026-10-27 03:46:12",
       "created_at": "2026-09-24 04:59:20",
       "golden_cross": 0,
-      "avg_volume_1m": 286018.0,
+      "avg_volume_1m": 295992.0,
       "sheet_trigger": null,
       "sheet_stop_loss": null,
       "sheet_stop_loss_raw": null,
       "dma_50": 329.56,
       "volume_today": 485530.0,
-      "vol_pct": 169.75,
+      "vol_pct": 164.03,
       "distance_pct": -3.1,
       "abs_distance_pct": 3.1,
       "proximity_pct": 103.1,
