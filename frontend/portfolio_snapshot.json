@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-04 18:16:05 IST",
+  "generated_at": "2026-11-04 18:31:24 IST",
   "date": "2026-11-04",
   "indices": {
     "NIFTY_50": {
@@ -1802,8 +1802,8 @@
       "symbol": "LUXIND.NS",
       "section": "above_200_dma",
       "cmp_report": 1172.0,
-      "dma_200": 1169.85,
-      "trigger_price": 1181.55,
+      "dma_200": 1170.62,
+      "trigger_price": 1182.33,
       "status": "PENDING",
       "current_price": 1183.0,
       "last_checked": "2026-09-24 05:15:54",
@@ -1816,8 +1816,8 @@
       "dma_50": 1140.37,
       "volume_today": 18872.0,
       "vol_pct": 70.14,
-      "distance_pct": -0.12,
-      "abs_distance_pct": 0.12,
+      "distance_pct": -0.06,
+      "abs_distance_pct": 0.06,
       "proximity_pct": 100.1,
       "is_crossed": true,
       "est_quantity": 8,
