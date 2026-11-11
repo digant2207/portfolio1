@@ -1,12 +1,12 @@
 {
-  "generated_at": "2026-11-10 18:45:52 IST",
-  "date": "2026-11-10",
+  "generated_at": "2026-11-11 09:15:34 IST",
+  "date": "2026-11-11",
   "indices": {
     "NIFTY_50": {
       "name": "NIFTY 50",
-      "price": 25044.65,
-      "change": 14.3,
-      "change_pct": 0.06,
+      "price": 25337.8,
+      "change": 307.45,
+      "change_pct": 1.23,
       "prev_close": 25030.35,
       "status": "UP"
     },
