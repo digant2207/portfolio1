@@ -1,20 +1,20 @@
 {
-  "generated_at": "2026-11-12 15:15:39 IST",
+  "generated_at": "2026-11-12 15:30:46 IST",
   "date": "2026-11-12",
   "indices": {
     "NIFTY_50": {
       "name": "NIFTY 50",
-      "price": 25270.75,
-      "change": 15.7,
-      "change_pct": 0.06,
+      "price": 25299.35,
+      "change": 44.3,
+      "change_pct": 0.18,
       "prev_close": 25255.05,
       "status": "UP"
     },
     "SENSEX": {
       "name": "SENSEX",
-      "price": 81933.26,
-      "change": 53.86,
-      "change_pct": 0.07,
+      "price": 81949.76,
+      "change": 70.36,
+      "change_pct": 0.09,
       "prev_close": 81879.4,
       "status": "UP"
     }
