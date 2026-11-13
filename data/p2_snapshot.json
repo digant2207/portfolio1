@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-13 17:01:11 IST",
+  "generated_at": "2026-11-13 17:16:06 IST",
   "date": "2026-11-13",
   "indices": {
     "NIFTY_50": {
@@ -2178,6 +2178,35 @@
       "created_at": "2026-10-27 11:31:15"
     },
     {
+      "id": 138,
+      "report_date": "2026-11-13",
+      "stock_name": "ANURAS.NS",
+      "symbol": "ANURAS.NS",
+      "cmp_report": 1300.5999755859375,
+      "wyckoff_score": 71.98,
+      "phase_label": "PHASE_C_SPRING",
+      "support": 1082.3,
+      "resistance": 1189.8,
+      "range_width_pct": 9.93,
+      "absorption_score": 14.29,
+      "demand_score": 7.69,
+      "spring_detected": 1,
+      "spring_low": 1067.8,
+      "sos_detected": 1,
+      "sos_candle_date": "2026-11-13",
+      "avg_volume_20d": 525321.0,
+      "ema_10": 1194.09,
+      "entry_price": 1300.6,
+      "suggested_stop_loss": 1235.57,
+      "sl_pct": 5.0,
+      "suggested_target": 1404.65,
+      "target_pct": 8.0,
+      "status": "PENDING",
+      "current_price": null,
+      "last_checked": null,
+      "created_at": "2026-11-13 11:46:06"
+    },
+    {
       "id": 80,
       "report_date": "2026-11-13",
       "stock_name": "TORNTPHARM.NS",
@@ -2321,35 +2350,6 @@
       "current_price": null,
       "last_checked": null,
       "created_at": "2026-09-25 06:25:03"
-    },
-    {
-      "id": 121,
-      "report_date": "2026-11-13",
-      "stock_name": "MGL.NS",
-      "symbol": "MGL.NS",
-      "cmp_report": 1158.5999755859375,
-      "wyckoff_score": 70.06,
-      "phase_label": "PHASE_C_SPRING",
-      "support": 1012.6,
-      "resistance": 1135.9,
-      "range_width_pct": 12.18,
-      "absorption_score": 14.29,
-      "demand_score": 5.77,
-      "spring_detected": 1,
-      "spring_low": 1012.6,
-      "sos_detected": 1,
-      "sos_candle_date": "2026-11-06",
-      "avg_volume_20d": 213387.0,
-      "ema_10": 1115.54,
-      "entry_price": 1158.6,
-      "suggested_stop_loss": 1100.67,
-      "sl_pct": 5.0,
-      "suggested_target": 1251.29,
-      "target_pct": 8.0,
-      "status": "PENDING",
-      "current_price": null,
-      "last_checked": null,
-      "created_at": "2026-11-06 11:31:06"
     }
   ]
 }
