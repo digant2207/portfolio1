@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-20 18:01:03 IST",
+  "generated_at": "2026-11-20 18:16:05 IST",
   "date": "2026-11-20",
   "indices": {
     "NIFTY_50": {
@@ -2164,6 +2164,34 @@
       "proximity_pct": 101.5,
       "is_crossed": true,
       "est_quantity": 1,
+      "est_allocation": 10000.0
+    },
+    {
+      "id": 647,
+      "report_date": "2026-11-20",
+      "stock_name": "Jindal Stainless Ltd",
+      "symbol": "JSL.NS",
+      "section": "above_200_dma",
+      "cmp_report": 735.65,
+      "dma_200": 732.87,
+      "trigger_price": 740.2,
+      "status": "PENDING",
+      "current_price": 753.75,
+      "last_checked": "2026-09-24 06:26:24",
+      "created_at": "2026-09-24 04:59:20",
+      "golden_cross": 0,
+      "avg_volume_1m": 514862.0,
+      "sheet_trigger": null,
+      "sheet_stop_loss": null,
+      "sheet_stop_loss_raw": null,
+      "dma_50": 722.75,
+      "volume_today": 258380.0,
+      "vol_pct": 50.18,
+      "distance_pct": -1.83,
+      "abs_distance_pct": 1.83,
+      "proximity_pct": 101.8,
+      "is_crossed": true,
+      "est_quantity": 13,
       "est_allocation": 10000.0
     },
     {
