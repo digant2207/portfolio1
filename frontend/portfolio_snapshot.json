@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-23 17:01:11 IST",
+  "generated_at": "2026-11-23 17:16:01 IST",
   "date": "2026-11-23",
   "indices": {
     "NIFTY_50": {
@@ -2098,8 +2098,8 @@
       "symbol": "LT.NS",
       "section": "above_200_dma",
       "cmp_report": 4099.9,
-      "dma_200": 3949.98,
-      "trigger_price": 3989.48,
+      "dma_200": 3950.82,
+      "trigger_price": 3990.33,
       "status": "PENDING",
       "current_price": 4036.0,
       "last_checked": "2026-11-05 04:00:51",
@@ -2112,9 +2112,9 @@
       "dma_50": 3866.11,
       "volume_today": 1259578.0,
       "vol_pct": 53.4,
-      "distance_pct": -1.17,
-      "abs_distance_pct": 1.17,
-      "proximity_pct": 101.2,
+      "distance_pct": -1.14,
+      "abs_distance_pct": 1.14,
+      "proximity_pct": 101.1,
       "is_crossed": true,
       "est_quantity": 2,
       "est_allocation": 10000.0
