@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-25 18:16:01 IST",
+  "generated_at": "2026-11-25 18:31:28 IST",
   "date": "2026-11-25",
   "indices": {
     "NIFTY_50": {
@@ -1984,34 +1984,6 @@
     }
   ],
   "upcoming_trades": [
-    {
-      "id": 848,
-      "report_date": "2026-11-25",
-      "stock_name": "Shree Cement Ltd",
-      "symbol": "SHREECEM.NS",
-      "section": "above_200_dma",
-      "cmp_report": 25245.0,
-      "dma_200": 24672.83,
-      "trigger_price": 24919.56,
-      "status": "PENDING",
-      "current_price": 24950.0,
-      "last_checked": "2026-11-23 09:45:36",
-      "created_at": "2026-11-05 11:30:50",
-      "golden_cross": 0,
-      "avg_volume_1m": 23558.0,
-      "sheet_trigger": null,
-      "sheet_stop_loss": null,
-      "sheet_stop_loss_raw": null,
-      "dma_50": 23154.1,
-      "volume_today": 17342.0,
-      "vol_pct": 73.61,
-      "distance_pct": -0.12,
-      "abs_distance_pct": 0.12,
-      "proximity_pct": 100.1,
-      "is_crossed": true,
-      "est_quantity": 0,
-      "est_allocation": 10000.0
-    },
     {
       "id": 527,
       "report_date": "2026-11-25",
