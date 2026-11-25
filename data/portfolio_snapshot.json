@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-25 18:01:10 IST",
+  "generated_at": "2026-11-25 18:16:01 IST",
   "date": "2026-11-25",
   "indices": {
     "NIFTY_50": {
@@ -2075,8 +2075,8 @@
       "symbol": "HINDUNILVR.NS",
       "section": "above_200_dma",
       "cmp_report": 2141.8,
-      "dma_200": 2113.92,
-      "trigger_price": 2135.06,
+      "dma_200": 2112.77,
+      "trigger_price": 2133.9,
       "status": "PENDING",
       "current_price": null,
       "last_checked": null,
@@ -2086,12 +2086,12 @@
       "sheet_trigger": null,
       "sheet_stop_loss": null,
       "sheet_stop_loss_raw": null,
-      "dma_50": 1918.45,
+      "dma_50": 1922.38,
       "volume_today": 5125327.0,
       "vol_pct": 278.16,
-      "distance_pct": -0.32,
-      "abs_distance_pct": 0.32,
-      "proximity_pct": 100.3,
+      "distance_pct": -0.37,
+      "abs_distance_pct": 0.37,
+      "proximity_pct": 100.4,
       "is_crossed": true,
       "est_quantity": 4,
       "est_allocation": 10000.0
