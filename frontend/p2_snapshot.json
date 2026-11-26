@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-26 17:01:19 IST",
+  "generated_at": "2026-11-26 17:16:05 IST",
   "date": "2026-11-26",
   "indices": {
     "NIFTY_50": {
@@ -1082,6 +1082,35 @@
       "current_price": null,
       "last_checked": null,
       "created_at": "2026-11-11 11:31:10"
+    },
+    {
+      "id": 156,
+      "report_date": "2026-11-26",
+      "stock_name": "SBILIFE.NS",
+      "symbol": "SBILIFE.NS",
+      "cmp_report": 1842.300048828125,
+      "wyckoff_score": 83.33,
+      "phase_label": "PHASE_D_MARKUP",
+      "support": 1615.0,
+      "resistance": 1827.7,
+      "range_width_pct": 13.17,
+      "absorption_score": 20.83,
+      "demand_score": 12.5,
+      "spring_detected": 1,
+      "spring_low": 1612.9,
+      "sos_detected": 1,
+      "sos_candle_date": "2026-11-12",
+      "avg_volume_20d": 1119923.0,
+      "ema_10": 1805.55,
+      "entry_price": 1842.3,
+      "suggested_stop_loss": 1750.18,
+      "sl_pct": 5.0,
+      "suggested_target": 2044.95,
+      "target_pct": 11.0,
+      "status": "PENDING",
+      "current_price": null,
+      "last_checked": null,
+      "created_at": "2026-11-26 11:46:04"
     },
     {
       "id": 132,
@@ -2387,35 +2416,6 @@
       "current_price": null,
       "last_checked": null,
       "created_at": "2026-11-25 11:31:16"
-    },
-    {
-      "id": 32,
-      "report_date": "2026-10-28",
-      "stock_name": "RAIN.NS",
-      "symbol": "RAIN.NS",
-      "cmp_report": 209.10000610351562,
-      "wyckoff_score": 72.5,
-      "phase_label": "PHASE_C_SPRING",
-      "support": 195.32,
-      "resistance": 225.49,
-      "range_width_pct": 15.45,
-      "absorption_score": 17.5,
-      "demand_score": 10.0,
-      "spring_detected": 1,
-      "spring_low": 195.04,
-      "sos_detected": 1,
-      "sos_candle_date": "2026-10-14",
-      "avg_volume_20d": 3930914.0,
-      "ema_10": 210.33,
-      "entry_price": 226.62,
-      "suggested_stop_loss": 215.29,
-      "sl_pct": 5.0,
-      "suggested_target": 244.75,
-      "target_pct": 8.0,
-      "status": "PENDING",
-      "current_price": null,
-      "last_checked": null,
-      "created_at": "2026-09-25 07:28:12"
     }
   ]
 }
