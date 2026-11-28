@@ -190,7 +190,9 @@ def _setup_tables(conn):
             close_price REAL,
             close_timestamp TIMESTAMP,
             realized_pnl REAL DEFAULT 0.0,
-            exit_reason TEXT                 -- 'TARGET_HIT', 'STOP_LOSS_HIT', 'TIME_STOP', 'TRAILING_STOP', 'MANUAL'
+            exit_reason TEXT,                -- 'TARGET_HIT', 'STOP_LOSS_HIT', 'TIME_STOP', 'TRAILING_STOP', 'MANUAL'
+            initial_quantity INTEGER DEFAULT 0,
+            partial_exit_done INTEGER DEFAULT 0
         )
     """)
 
@@ -360,15 +362,18 @@ def reset_portfolio():
     log_event("WARNING", "Portfolio 1 has been reset to initial capital ₹1,00,000")
 
 
-def reset_p2_portfolio():
-    """Resets Portfolio 2 to ₹1,00,000 all-cash baseline, clearing positions and resetting watchlist to PENDING."""
+def reset_p2_portfolio(preserve_history: bool = True):
+    """Resets Portfolio 2 to ₹1,00,000 all-cash baseline. Closes any open positions and keeps historical records."""
     with get_db() as conn:
         conn.execute("UPDATE portfolio_state SET cash_balance = 100000.0, invested_capital = 0.0, realized_pnl = 0.0 WHERE id = 2")
-        conn.execute("DELETE FROM p2_positions")
-        conn.execute("DELETE FROM p2_trades")
+        if preserve_history:
+            conn.execute("UPDATE p2_positions SET status = 'CLOSED', exit_reason = 'PORTFOLIO_RESET', close_timestamp = CURRENT_TIMESTAMP WHERE status = 'OPEN'")
+        else:
+            conn.execute("DELETE FROM p2_positions")
+            conn.execute("DELETE FROM p2_trades")
         conn.execute("UPDATE p2_watchlist SET status = 'PENDING'")
         conn.commit()
-    log_event("INFO", "Portfolio 2 reset to 100% cash (₹1,00,000.00). All candidates kept in PENDING for confirmation.")
+    log_event("INFO", "Portfolio 2 reset to 100% cash (₹1,00,000.00). Historical trade records preserved; positions cleanly closed.")
     export_p2_snapshot()
     export_portfolio_snapshot()
 
@@ -981,6 +986,18 @@ def get_p2_trades(limit: int = 50) -> List[Dict[str, Any]]:
     """Returns Portfolio 2 trade history."""
     with get_db() as conn:
         rows = conn.execute("SELECT * FROM p2_trades ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_p2_today_trades() -> List[Dict[str, Any]]:
+    """Returns Portfolio 2 trades executed on the current date."""
+    today_prefix = datetime.now().strftime("%Y-%m-%d")
+    with get_db() as conn:
+        rows = conn.execute("""
+            SELECT * FROM p2_trades 
+            WHERE timestamp LIKE ? OR date(timestamp) = date('now', 'localtime')
+            ORDER BY id DESC
+        """, (f"{today_prefix}%",)).fetchall()
         return [dict(r) for r in rows]
 
 

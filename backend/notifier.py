@@ -10,44 +10,33 @@ from datetime import datetime, date
 from typing import List, Dict, Any, Tuple, Optional
 from .config import load_config
 from .database import (
-    get_portfolio_summary, get_open_positions, get_trades,
+    get_portfolio_summary, get_open_positions, get_trades, get_today_trades,
     get_pending_watchlist, get_nearest_breakout_candidates, log_event, get_db,
     is_notification_sent, record_notification_sent,
     # Portfolio 2
-    get_p2_portfolio_summary, get_p2_open_positions, get_p2_watchlist,
+    get_p2_portfolio_summary, get_p2_open_positions, get_p2_watchlist, get_p2_trades, get_p2_today_trades,
 )
 
-def generate_daily_report_html() -> Tuple[str, str, Dict[str, Any]]:
+def generate_p1_daily_report_html() -> Tuple[str, str, Dict[str, Any]]:
     """
-    Generates subject and HTML content for the comprehensive daily 6:30 PM email report
-    covering:
-    1. Portfolio Financial Status & Open Positions
-    2. Today's Executed Trades
-    3. Tomorrow's Top 10 Most Near Breakout Candidates (Ranked by 200 DMA + 1% proximity)
+    Generates subject and HTML content for Portfolio 1 (200 DMA Breakout) daily 6:30 PM report.
     """
     summary = get_portfolio_summary()
     open_positions = get_open_positions()
     
     today_str = datetime.now().strftime("%Y-%m-%d")
-    # Fetch today's trades
     with get_db() as conn:
         trades_rows = conn.execute("""
             SELECT * FROM trades 
-            WHERE date(timestamp) = date('now') 
+            WHERE date(timestamp) = date('now') OR timestamp LIKE ?
             ORDER BY id DESC
-        """).fetchall()
+        """, (f"{today_str}%",)).fetchall()
         todays_trades = [dict(r) for r in trades_rows]
         
     breakout_candidates = get_nearest_breakout_candidates(limit=10)
     summary["breakout_candidates"] = breakout_candidates
     summary["todays_trades"] = todays_trades
 
-    # ── Portfolio 2 data for the combined report ───────────────────────────────
-    p2_summary   = get_p2_portfolio_summary()
-    p2_positions = get_p2_open_positions()
-    p2_watchlist = get_p2_watchlist(limit=5)  # Top 5 Wyckoff candidates by score
-    p2_report_section = _build_p2_report_section(p2_summary, p2_positions, p2_watchlist)
-    
     total_val = summary.get("total_portfolio_value", 100000.0)
     cash = summary.get("cash_balance", 100000.0)
     invested = summary.get("invested_capital", 0.0)
@@ -59,7 +48,7 @@ def generate_daily_report_html() -> Tuple[str, str, Dict[str, Any]]:
     sign_pnl_today = "+" if pnl_today >= 0 else ""
     color_pnl_today = "#10b981" if pnl_today >= 0 else "#ef4444"
     
-    subject = f"📊 Smart Money Daily Report [6:30 PM | {today_str}] - Value: ₹{total_val:,.2f} ({sign_ret}{ret_pct}%) | Top Breakouts"
+    subject = f"📊 Portfolio 1 Daily Report [200 DMA Breakout | {today_str}] - Value: ₹{total_val:,.2f} ({sign_ret}{ret_pct}%) | Top Breakouts"
     
     # 1. Render Open Positions rows
     positions_html = ""
@@ -72,8 +61,8 @@ def generate_daily_report_html() -> Tuple[str, str, Dict[str, Any]]:
             positions_html += f"""
             <tr style="border-bottom: 1px solid #1e293b;">
                 <td style="padding: 10px 12px; font-weight: 700; color: #f8fafc;">
-                    {p['symbol']}
-                    <div style="font-size: 11px; color: #94a3b8; font-weight: 400;">{p.get('stock_name', '')}</div>
+                    {html.escape(p['symbol'])}
+                    <div style="font-size: 11px; color: #94a3b8; font-weight: 400;">{html.escape(p.get('stock_name', ''))}</div>
                 </td>
                 <td style="padding: 10px 12px; color: #94a3b8;">{p['quantity']}</td>
                 <td style="padding: 10px 12px; color: #cbd5e1;">₹{p['buy_price']:,.2f}</td>
@@ -84,7 +73,7 @@ def generate_daily_report_html() -> Tuple[str, str, Dict[str, Any]]:
             </tr>
             """
     else:
-        positions_html = '<tr><td colspan="7" style="padding: 16px; text-align: center; color: #64748b;">No active open positions currently held.</td></tr>'
+        positions_html = '<tr><td colspan="7" style="padding: 16px; text-align: center; color: #64748b;">No active open positions currently held in Portfolio 1.</td></tr>'
 
     # 2. Render Today's Trades rows
     trades_html = ""
@@ -94,10 +83,11 @@ def generate_daily_report_html() -> Tuple[str, str, Dict[str, Any]]:
             type_color = "#3b82f6" if is_buy else "#f59e0b"
             trade_pnl_str = f"₹{t.get('pnl', 0.0):,.2f}" if not is_buy else "-"
             trade_pnl_color = "#10b981" if t.get('pnl', 0) >= 0 else "#ef4444"
+            time_part = t['timestamp'].split()[1] if ' ' in t['timestamp'] else t['timestamp']
             trades_html += f"""
             <tr style="border-bottom: 1px solid #1e293b;">
-                <td style="padding: 8px 12px; color: #94a3b8; font-size: 12px;">{t['timestamp'].split()[1] if ' ' in t['timestamp'] else t['timestamp']}</td>
-                <td style="padding: 8px 12px; font-weight: 600; color: #f8fafc;">{t['symbol']}</td>
+                <td style="padding: 8px 12px; color: #94a3b8; font-size: 12px;">{time_part}</td>
+                <td style="padding: 8px 12px; font-weight: 600; color: #f8fafc;">{html.escape(t['symbol'])}</td>
                 <td style="padding: 8px 12px;"><span style="background: {type_color}22; color: {type_color}; padding: 3px 8px; border-radius: 4px; font-weight: 600; font-size: 11px;">{t['trade_type']}</span></td>
                 <td style="padding: 8px 12px; color: #cbd5e1;">₹{t['price']:,.2f}</td>
                 <td style="padding: 8px 12px; color: #cbd5e1;">{t['quantity']}</td>
@@ -115,7 +105,6 @@ def generate_daily_report_html() -> Tuple[str, str, Dict[str, Any]]:
         for idx, c in enumerate(breakout_candidates, 1):
             is_above = c.get("section") == "above_200_dma"
             sec_badge = '<span style="background: rgba(16, 185, 129, 0.15); color: #10b981; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;">Above 200 DMA</span>' if is_above else '<span style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;">Below 200 DMA</span>'
-            gc_badge = ""
             
             cmp_val = c.get("current_price") or c.get("cmp_report", 0.0)
             trig_val = c.get("trigger_price", 0.0)
@@ -130,10 +119,10 @@ def generate_daily_report_html() -> Tuple[str, str, Dict[str, Any]]:
             <tr style="border-bottom: 1px solid #1e293b;">
                 <td style="padding: 10px 12px; font-weight: 700; color: #f8fafc;">
                     <span style="color: #64748b; font-size: 11px; margin-right: 4px;">#{idx}</span>
-                    {c['symbol']}
-                    <div style="font-size: 11px; color: #94a3b8; font-weight: 400; margin-top: 2px;">{c.get('stock_name', '')}</div>
+                    {html.escape(c['symbol'])}
+                    <div style="font-size: 11px; color: #94a3b8; font-weight: 400; margin-top: 2px;">{html.escape(c.get('stock_name', ''))}</div>
                 </td>
-                <td style="padding: 10px 12px;">{sec_badge}{gc_badge}</td>
+                <td style="padding: 10px 12px;">{sec_badge}</td>
                 <td style="padding: 10px 12px; color: #cbd5e1; font-weight: 600;">₹{cmp_val:,.2f}</td>
                 <td style="padding: 10px 12px; color: #94a3b8;">₹{dma_val:,.2f}</td>
                 <td style="padding: 10px 12px; color: #38bdf8; font-weight: 700;">₹{trig_val:,.2f}</td>
@@ -158,7 +147,7 @@ def generate_daily_report_html() -> Tuple[str, str, Dict[str, Any]]:
             body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0b0f19; color: #e2e8f0; margin: 0; padding: 20px; }}
             .container {{ max-width: 820px; margin: 0 auto; background: #131b2e; border: 1px solid #202b42; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }}
             .header {{ background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); padding: 24px; border-bottom: 1px solid #243049; }}
-            .badge-hdr {{ display: inline-block; background: #0284c7; color: #ffffff; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; margin-bottom: 8px; }}
+            .badge-hdr {{ display: inline-block; background: #0284c7; color: #ffffff; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px; }}
             .metric-grid {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; padding: 20px; background: #0d1322; border-bottom: 1px solid #1c263c; }}
             .card {{ background: #162035; border: 1px solid #23304b; border-radius: 8px; padding: 14px; text-align: center; }}
             .card-label {{ font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }}
@@ -174,9 +163,14 @@ def generate_daily_report_html() -> Tuple[str, str, Dict[str, Any]]:
     <body>
         <div class="container">
             <div class="header">
-                <span class="badge-hdr">Daily 6:30 PM IST Summary</span>
-                <h1 style="margin: 0 0 6px 0; font-size: 22px; color: #f8fafc;">Smart Money Paper Trading Report</h1>
-                <p style="margin: 0; color: #94a3b8; font-size: 13px;">Date: {today_str} | Generated at: 18:30 IST | Strategy: 200 DMA + 1% Breakout</p>
+                <span class="badge-hdr">Portfolio 1 · Daily 6:30 PM IST Report</span>
+                <h1 style="margin: 0 0 6px 0; font-size: 22px; color: #f8fafc;">Portfolio 1: 200 DMA Breakout Trading Report</h1>
+                <p style="margin: 0; color: #94a3b8; font-size: 13px;">Date: {today_str} | Generated at: 18:30 IST | Strategy: 200 DMA + 1% Breakout | Max 10 Positions</p>
+            </div>
+
+            <!-- Terminal Link Button -->
+            <div style="text-align: center; padding: 16px 20px 6px 20px; background: #0d1322;">
+                <a href="https://digant2207.github.io/portfolio1/index.html" style="display: inline-block; background: linear-gradient(135deg, #0284c7 0%, #00f2fe 100%); color: #0b132b; font-weight: 700; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-size: 13px; letter-spacing: 0.5px; box-shadow: 0 4px 14px rgba(0, 242, 254, 0.3);">📈 Open Portfolio 1 Terminal &rarr;</a>
             </div>
             
             <!-- Section 1: Portfolio Financial Metrics -->
@@ -201,7 +195,7 @@ def generate_daily_report_html() -> Tuple[str, str, Dict[str, Any]]:
 
             <!-- Section 2: Active Open Positions -->
             <div class="section">
-                <h3 class="section-title">💼 Active Open Holdings ({len(open_positions)})</h3>
+                <h3 class="section-title">💼 Active Open Holdings ({len(open_positions)} / 10 Active)</h3>
                 <table>
                     <thead>
                         <tr>
@@ -266,9 +260,6 @@ def generate_daily_report_html() -> Tuple[str, str, Dict[str, Any]]:
                 </table>
             </div>
 
-            <!-- Section 5: Portfolio 2 — Wyckoff Swing Delivery -->
-            {p2_report_section}
-
             <div class="rules-box">
                 <h4 style="margin: 0 0 8px 0; color: #38bdf8; font-size: 13px;">⚙️ Execution & Risk Management Rules:</h4>
                 <ul style="margin: 0; padding-left: 20px; color: #94a3b8; font-size: 12px; line-height: 1.6;">
@@ -289,6 +280,263 @@ def generate_daily_report_html() -> Tuple[str, str, Dict[str, Any]]:
     """
     
     return subject, html_body, summary
+
+
+def generate_p2_daily_report_html() -> Tuple[str, str, Dict[str, Any]]:
+    """
+    Generates subject and HTML content for Portfolio 2 (Wyckoff Swing Delivery) daily 6:30 PM report.
+    """
+    p2_summary = get_p2_portfolio_summary()
+    p2_positions = get_p2_open_positions()
+    p2_watchlist = get_p2_watchlist(limit=10)
+    p2_today_trades = get_p2_today_trades()
+    today_str = datetime.now().strftime("%Y-%m-%d")
+
+    total_val = p2_summary.get("total_portfolio_value", 100000.0)
+    cash = p2_summary.get("cash_balance", 100000.0)
+    invested = p2_summary.get("invested_capital", 0.0)
+    ret_pct = p2_summary.get("total_return_pct", 0.0)
+    total_pnl = p2_summary.get("total_pnl", 0.0)
+    pos_count = p2_summary.get("open_positions_count", len(p2_positions))
+
+    color_ret = "#c084fc" if ret_pct >= 0 else "#ef4444"
+    sign_ret = "+" if ret_pct >= 0 else ""
+    color_pnl = "#10b981" if total_pnl >= 0 else "#ef4444"
+    sign_pnl = "+" if total_pnl >= 0 else ""
+
+    subject = f"🌊 Portfolio 2 Daily Report [Wyckoff Swing | {today_str}] - Value: ₹{total_val:,.2f} ({sign_ret}{ret_pct:.2f}%) | Swing Setups"
+
+    # 1. Open Swing Positions
+    positions_html = ""
+    if p2_positions:
+        for p in p2_positions:
+            pnl = p.get("current_pnl", 0.0)
+            pnl_pct = p.get("current_pnl_pct", 0.0)
+            pnl_color = "#10b981" if pnl >= 0 else "#ef4444"
+            pnl_sign = "+" if pnl >= 0 else ""
+            sess = p.get("sessions_held", 0)
+            trail_tag = " <span style='background:rgba(192,132,252,0.2);color:#c084fc;padding:2px 6px;border-radius:3px;font-size:10px;'>🚨 Trail</span>" if p.get("trailing_active") else ""
+            eff_sl = p.get("trailing_sl") if p.get("trailing_active") else p.get("stop_loss", 0.0)
+            positions_html += f"""
+            <tr style="border-bottom: 1px solid #2d1f5e;">
+                <td style="padding: 10px 12px; font-weight: 700; color: #f8fafc;">
+                    {html.escape(p['symbol'])}
+                    <div style="font-size: 11px; color: #a78bfa; font-weight: 400;">{html.escape(p.get('stock_name', ''))}</div>
+                </td>
+                <td style="padding: 10px 12px; color: #cbd5e1;">{p['quantity']}</td>
+                <td style="padding: 10px 12px; color: #cbd5e1;">₹{p['buy_price']:,.2f}</td>
+                <td style="padding: 10px 12px; color: #f8fafc; font-weight: 600;">₹{p.get('current_price', p['buy_price']):,.2f}</td>
+                <td style="padding: 10px 12px; color: #ef4444;">₹{eff_sl:,.2f}</td>
+                <td style="padding: 10px 12px; color: #10b981;">₹{p.get('target_price', 0):,.2f}</td>
+                <td style="padding: 10px 12px; color: #cbd5e1;">{sess}/10{trail_tag}</td>
+                <td style="padding: 10px 12px; color: {pnl_color}; font-weight: 700;">{pnl_sign}₹{pnl:,.2f} ({pnl_sign}{pnl_pct:.2f}%)</td>
+            </tr>
+            """
+    else:
+        positions_html = '<tr><td colspan="8" style="padding: 16px; text-align: center; color: #a78bfa;">No open Wyckoff swing positions currently held.</td></tr>'
+
+    # 2. Today's Executed Trades
+    trades_html = ""
+    if p2_today_trades:
+        for t in p2_today_trades:
+            is_buy = t.get("trade_type") == "BUY"
+            type_color = "#38bdf8" if is_buy else "#f59e0b"
+            trade_pnl = t.get("pnl", 0.0)
+            trade_pnl_str = f"₹{trade_pnl:,.2f}" if not is_buy else "-"
+            trade_pnl_color = "#10b981" if trade_pnl >= 0 else "#ef4444"
+            time_part = t.get("timestamp", "").split()[1] if " " in t.get("timestamp", "") else t.get("timestamp", "")
+            trades_html += f"""
+            <tr style="border-bottom: 1px solid #2d1f5e;">
+                <td style="padding: 8px 12px; color: #a78bfa; font-size: 12px;">{time_part}</td>
+                <td style="padding: 8px 12px; font-weight: 600; color: #f8fafc;">{html.escape(t['symbol'])}</td>
+                <td style="padding: 8px 12px;"><span style="background: {type_color}22; color: {type_color}; padding: 3px 8px; border-radius: 4px; font-weight: 600; font-size: 11px;">{t['trade_type']}</span></td>
+                <td style="padding: 8px 12px; color: #cbd5e1;">₹{t['price']:,.2f}</td>
+                <td style="padding: 8px 12px; color: #cbd5e1;">{t['quantity']}</td>
+                <td style="padding: 8px 12px; color: #f8fafc;">₹{t['total_value']:,.2f}</td>
+                <td style="padding: 8px 12px; color: {trade_pnl_color}; font-weight: 600;">{trade_pnl_str}</td>
+                <td style="padding: 8px 12px; color: #a78bfa; font-size: 12px;">{t.get('exit_reason') or 'SWING_ENTRY'}</td>
+            </tr>
+            """
+    else:
+        trades_html = '<tr><td colspan="8" style="padding: 16px; text-align: center; color: #a78bfa;">No swing trades executed during today\'s market session.</td></tr>'
+
+    # 3. Top Wyckoff Candidates
+    candidates_html = ""
+    if p2_watchlist:
+        for idx, c in enumerate(p2_watchlist, 1):
+            score = c.get("wyckoff_score", 0.0)
+            sc_col = "#10b981" if score >= 80 else "#f59e0b" if score >= 60 else "#a78bfa"
+            phase = c.get("phase_label", "UNKNOWN").replace("_", " ")
+            spring = "✅ Yes" if c.get("spring_detected") else "—"
+            sos = "✅ Yes" if c.get("sos_detected") else "—"
+            candidates_html += f"""
+            <tr style="border-bottom: 1px solid #2d1f5e;">
+                <td style="padding: 10px 12px; font-weight: 700; color: #f8fafc;">
+                    <span style="color: #a78bfa; font-size: 11px; margin-right: 4px;">#{idx}</span>
+                    {html.escape(c.get('symbol',''))}
+                    <div style="font-size: 11px; color: #cbd5e1; font-weight: 400; margin-top: 2px;">{html.escape(c.get('stock_name',''))}</div>
+                </td>
+                <td style="padding: 10px 12px; color: {sc_col}; font-weight: 700; font-size: 15px;">{score:.0f}<span style="color:#64748b;font-size:11px;">/100</span></td>
+                <td style="padding: 10px 12px; color: #cbd5e1; font-size: 12px;">{phase}</td>
+                <td style="padding: 10px 12px; color: #cbd5e1;">{spring}</td>
+                <td style="padding: 10px 12px; color: #cbd5e1;">{sos}</td>
+                <td style="padding: 10px 12px; color: #38bdf8; font-weight: 600;">₹{c.get('entry_price', 0):,.2f}</td>
+                <td style="padding: 10px 12px; color: #ef4444;">₹{c.get('suggested_stop_loss', 0):,.2f}</td>
+                <td style="padding: 10px 12px; color: #10b981; font-weight: 600;">₹{c.get('suggested_target', 0):,.2f}</td>
+            </tr>
+            """
+    else:
+        candidates_html = '<tr><td colspan="8" style="padding: 16px; text-align: center; color: #a78bfa;">No Wyckoff swing candidates currently in watchlist.</td></tr>'
+
+    html_body = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <style>
+            body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #080411; color: #e2e8f0; margin: 0; padding: 20px; }}
+            .container {{ max-width: 820px; margin: 0 auto; background: #110924; border: 1px solid #2d1f5e; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.6); }}
+            .header {{ background: linear-gradient(135deg, #1e0e3e 0%, #0d061c 100%); padding: 24px; border-bottom: 1px solid #3b2774; }}
+            .badge-hdr {{ display: inline-block; background: #7c3aed; color: #ffffff; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px; }}
+            .metric-grid {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; padding: 20px; background: #0c0618; border-bottom: 1px solid #2d1f5e; }}
+            .card {{ background: #190f33; border: 1px solid #3b2774; border-radius: 8px; padding: 14px; text-align: center; }}
+            .card-label {{ font-size: 11px; color: #a78bfa; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }}
+            .card-val {{ font-size: 18px; font-weight: 700; color: #f8fafc; }}
+            .section {{ padding: 20px; border-bottom: 1px solid #2d1f5e; }}
+            .section-title {{ font-size: 15px; font-weight: 600; color: #c084fc; margin: 0 0 12px 0; text-transform: uppercase; letter-spacing: 0.5px; }}
+            table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
+            th {{ background: #140b2b; color: #a78bfa; font-weight: 600; text-align: left; padding: 10px 12px; border-bottom: 1px solid #3b2774; }}
+            .rules-box {{ background: #0c0618; border: 1px solid #3b2774; border-radius: 8px; padding: 16px; margin: 20px; }}
+            .footer {{ padding: 16px 20px; background: #0c0618; color: #a78bfa; font-size: 11px; text-align: center; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <span class="badge-hdr">Portfolio 2 · Daily 6:30 PM IST Report</span>
+                <h1 style="margin: 0 0 6px 0; font-size: 22px; color: #f8fafc;">Portfolio 2: Wyckoff Swing Delivery (5–10 Days)</h1>
+                <p style="margin: 0; color: #c084fc; font-size: 13px;">Date: {today_str} | Generated at: 18:30 IST | Capital: ₹1,00,000 | 5 Slots (₹20,000/Trade)</p>
+            </div>
+
+            <!-- Terminal Link Button -->
+            <div style="text-align: center; padding: 16px 20px 6px 20px; background: #0c0618;">
+                <a href="https://digant2207.github.io/portfolio1/p2.html" style="display: inline-block; background: linear-gradient(135deg, #7c3aed 0%, #c084fc 100%); color: #ffffff; font-weight: 700; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-size: 13px; letter-spacing: 0.5px; box-shadow: 0 4px 14px rgba(124, 58, 237, 0.4);">🌊 Open Portfolio 2 Terminal &rarr;</a>
+            </div>
+
+            <!-- Section 1: Financial Metrics -->
+            <div class="metric-grid">
+                <div class="card">
+                    <div class="card-label">Total Portfolio</div>
+                    <div class="card-val">₹{total_val:,.2f}</div>
+                </div>
+                <div class="card">
+                    <div class="card-label">Cash Balance</div>
+                    <div class="card-val">₹{cash:,.2f}</div>
+                </div>
+                <div class="card">
+                    <div class="card-label">Invested Capital</div>
+                    <div class="card-val">₹{invested:,.2f}</div>
+                </div>
+                <div class="card">
+                    <div class="card-label">Swing Return</div>
+                    <div class="card-val" style="color: {color_ret};">{sign_ret}{ret_pct:.2f}%</div>
+                </div>
+            </div>
+
+            <!-- Section 2: Active Open Swing Holdings -->
+            <div class="section">
+                <h3 class="section-title">🌊 Active Open Swing Holdings ({pos_count}/5 Active)</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Stock</th>
+                            <th>Qty</th>
+                            <th>Buy Price</th>
+                            <th>CMP</th>
+                            <th>Effective SL</th>
+                            <th>Target</th>
+                            <th>Holding</th>
+                            <th>Unrealized P&L</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {positions_html}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Section 3: Today's Executed Trades -->
+            <div class="section">
+                <h3 class="section-title">⚡ Today's Executed Swing Trades ({len(p2_today_trades)})</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Time (IST)</th>
+                            <th>Stock</th>
+                            <th>Action</th>
+                            <th>Price</th>
+                            <th>Qty</th>
+                            <th>Total</th>
+                            <th>Realized P&L</th>
+                            <th>Reason</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {trades_html}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Section 4: Tomorrow's Top Wyckoff Candidates -->
+            <div class="section">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <h3 class="section-title" style="margin: 0; color: #c084fc;">🔭 Top Wyckoff Swing Candidates (By Score)</h3>
+                    <span style="font-size: 11px; background: rgba(192, 132, 252, 0.15); color: #c084fc; padding: 3px 8px; border-radius: 4px; font-weight: 600;">Phase C Springs &amp; Phase D SOS Breakouts</span>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Rank & Stock</th>
+                            <th>Score</th>
+                            <th>Phase</th>
+                            <th>Spring</th>
+                            <th>SOS</th>
+                            <th>Entry CMP</th>
+                            <th>Stop Loss</th>
+                            <th>Target</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {candidates_html}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="rules-box">
+                <h4 style="margin: 0 0 8px 0; color: #c084fc; font-size: 13px;">⚙️ Portfolio 2 Wyckoff Swing Rules:</h4>
+                <ul style="margin: 0; padding-left: 20px; color: #cbd5e1; font-size: 12px; line-height: 1.6;">
+                    <li><strong>Allocation:</strong> ₹20,000 per swing position (Max 5 concurrent delivery holdings from ₹1,00,000 capital).</li>
+                    <li><strong>Holding Period:</strong> 5 to 10 trading sessions maximum delivery holding (Time-stop exit on Day 10).</li>
+                    <li><strong>Trailing Stop:</strong> Trailing stop-loss automatically activates when unrealized profit reaches +5%.</li>
+                    <li><strong>Target Exit:</strong> +8% to +14% primary target exit depending on Wyckoff resistance levels.</li>
+                    <li><strong>Stop-Loss:</strong> Strict -3.5% to -5% capital protection below Spring low or accumulation support.</li>
+                </ul>
+            </div>
+
+            <div class="footer">
+                Automated notification from your Paper Trading Terminal. Instant Telegram alerts enabled for all live trade triggers.
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+
+    return subject, html_body, p2_summary
+
+
+def generate_daily_report_html() -> Tuple[str, str, Dict[str, Any]]:
+    """Legacy alias: returns Portfolio 1 daily report."""
+    return generate_p1_daily_report_html()
 
 def notify_daily_summary_telegram(summary: Dict[str, Any], todays_trades: List[Dict[str, Any]], candidates: List[Dict[str, Any]]):
     """
@@ -367,13 +615,13 @@ def notify_daily_summary_telegram(summary: Dict[str, Any], todays_trades: List[D
     msg = "\n".join(lines)
     send_telegram_message(msg)
 
-def send_daily_email_report() -> Tuple[bool, str]:
+def _send_smtp_email(subject: str, html_body: str) -> Tuple[bool, str]:
     """
-    Sends the generated comprehensive daily report email via Gmail SMTP and dispatches Telegram summary.
+    Core SMTP sender sending HTML email via configured Gmail credentials.
     """
     import os
     if os.environ.get("MOCK_NOTIFICATIONS") == "1":
-        return True, "Mock daily summary email delivered (test mode active)."
+        return True, f"Mock email '{subject}' delivered (test mode active)."
 
     cfg = load_config()
     user = cfg.get("gmail_user", "").strip()
@@ -387,10 +635,6 @@ def send_daily_email_report() -> Tuple[bool, str]:
         log_event("WARNING", msg)
         return False, msg
         
-    subject, html_body, summary = generate_daily_report_html()
-    todays_trades = summary.get("todays_trades", [])
-    breakout_candidates = summary.get("breakout_candidates", [])
-    
     try:
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
@@ -405,20 +649,58 @@ def send_daily_email_report() -> Tuple[bool, str]:
             server.login(user, pwd)
             server.sendmail(user, recipient, msg.as_string())
             
-        success_msg = f"Daily summary email successfully sent to {recipient}."
+        success_msg = f"Email '{subject}' successfully sent to {recipient}."
         log_event("INFO", success_msg)
-        
-        # Dispatch compact Telegram summary alongside email
-        try:
-            notify_daily_summary_telegram(summary, todays_trades, breakout_candidates)
-        except Exception as tg_e:
-            log_event("WARNING", f"Telegram daily summary alert error: {tg_e}")
-            
         return True, success_msg
     except Exception as e:
-        err = f"Failed to send daily summary email via SMTP: {str(e)}"
+        err = f"Failed to send email '{subject}' via SMTP: {str(e)}"
         log_event("ERROR", err)
         return False, err
+
+def send_p1_daily_email_report() -> Tuple[bool, str]:
+    """
+    Sends the separate Portfolio 1 (200 DMA Breakout) daily report email.
+    """
+    subject, html_body, summary = generate_p1_daily_report_html()
+    return _send_smtp_email(subject, html_body)
+
+def send_p2_daily_email_report() -> Tuple[bool, str]:
+    """
+    Sends the separate Portfolio 2 (Wyckoff Swing Delivery) daily report email.
+    """
+    subject, html_body, p2_summary = generate_p2_daily_report_html()
+    return _send_smtp_email(subject, html_body)
+
+def send_daily_email_report(portfolio_id: Optional[int] = None) -> Tuple[bool, str]:
+    """
+    Sends daily report emails.
+    - If portfolio_id == 1: sends Portfolio 1 report.
+    - If portfolio_id == 2: sends Portfolio 2 report.
+    - If portfolio_id is None: sends BOTH Portfolio 1 and Portfolio 2 in separate emails!
+    Also dispatches the Telegram summary alert.
+    """
+    results = []
+
+    if portfolio_id in (None, 1):
+        s1, m1 = send_p1_daily_email_report()
+        results.append(f"Portfolio 1: {'Delivered' if s1 else 'Failed (' + m1 + ')'}")
+
+    if portfolio_id in (None, 2):
+        s2, m2 = send_p2_daily_email_report()
+        results.append(f"Portfolio 2: {'Delivered' if s2 else 'Failed (' + m2 + ')'}")
+
+    # Dispatch compact Telegram summary alert
+    try:
+        summary = get_portfolio_summary()
+        todays_trades = summary.get("todays_trades", []) or get_today_trades()
+        breakout_candidates = summary.get("breakout_candidates", []) or get_nearest_breakout_candidates(limit=5)
+        notify_daily_summary_telegram(summary, todays_trades, breakout_candidates)
+    except Exception as tg_e:
+        log_event("WARNING", f"Telegram daily summary alert error: {tg_e}")
+
+    overall_success = all("Delivered" in r for r in results)
+    combined_msg = " | ".join(results)
+    return overall_success, f"Separate Daily Reports Dispatched -> {combined_msg}"
 
 def send_telegram_message(text: str, parse_mode: str = "HTML") -> Tuple[bool, str]:
     """

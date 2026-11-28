@@ -72,7 +72,7 @@ body.dark-theme {
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
     overflow-x: hidden;
-    padding-bottom: 70px; /* Space for mobile bottom bar */
+    padding-bottom: calc(75px + env(safe-area-inset-bottom, 0px)); /* Space for mobile bottom bar */
 }
 
 @media (min-width: 769px) {
@@ -994,15 +994,19 @@ tr.row-rejected:hover td {
     bottom: 0;
     left: 0;
     right: 0;
-    height: 60px;
-    background: rgba(12, 18, 30, 0.95);
+    min-height: 60px;
+    height: calc(60px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    background: rgba(12, 18, 30, 0.96);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
     border-top: 1px solid var(--border-color);
     z-index: 1000;
     justify-content: space-around;
     align-items: center;
-    padding: 0 8px;
+    padding-left: 6px;
+    padding-right: 6px;
+    box-sizing: border-box;
 }
 
 .bottom-nav-item {
@@ -1015,12 +1019,20 @@ tr.row-rejected:hover td {
     color: var(--text-muted);
     font-size: 10px;
     font-weight: 600;
-    gap: 4px;
+    gap: 3px;
     cursor: pointer;
     flex: 1;
     height: 100%;
     position: relative;
     transition: var(--transition);
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.bottom-nav-item * {
+    pointer-events: none;
 }
 
 .bottom-nav-icon {
@@ -1218,17 +1230,19 @@ input:focus, select:focus, textarea:focus {
     flex-direction: column;
     gap: 10px;
     z-index: 2000;
+    pointer-events: none;
 }
 
 @media (max-width: 768px) {
     #toast-container {
-        bottom: 74px; /* Above mobile bottom bar */
+        bottom: calc(74px + env(safe-area-inset-bottom, 0px)); /* Above mobile bottom bar */
         left: 16px;
         right: 16px;
     }
 }
 
 .toast {
+    pointer-events: auto;
     background: var(--bg-card);
     border: 1px solid var(--border-highlight);
     border-left: 4px solid var(--primary);
@@ -1325,9 +1339,29 @@ input:focus, select:focus, textarea:focus {
         background: #a855f7;
     }
 
-    /* Hide desktop P1 tab links on mobile in favor of bottom nav */
+    /* P1 top tab bar is horizontally scrollable on mobile */
     #p1-tab-nav {
-        display: none !important;
+        display: flex !important;
+        overflow-x: auto;
+        white-space: nowrap;
+        padding: 6px 10px;
+        gap: 6px;
+        scrollbar-width: none;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    #p1-tab-nav::-webkit-scrollbar {
+        display: none;
+    }
+
+    #p1-tab-nav .tab-actions {
+        display: flex;
+        gap: 6px;
+    }
+
+    #p1-tab-nav .tab-actions .btn {
+        padding: 5px 8px;
+        font-size: 11px;
     }
 
     /* P2 top tab bar is horizontally scrollable on mobile */

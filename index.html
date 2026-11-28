@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Smart Money 200 DMA Paper Trading Terminal</title>
     <meta name="description" content="Real-time paper trading dashboard for 200 DMA breakout strategy with portfolio tracking, live positions, today's trades, and upcoming trade stop/reject controls.">
     <!-- Google Fonts Inter & JetBrains Mono -->
@@ -467,29 +467,29 @@
         </main>
 
         <!-- Mobile Sticky Bottom Navigation Bar -->
-        <nav class="mobile-bottom-nav">
-            <button class="bottom-nav-item active" data-tab="tab-upcoming">
+        <nav class="mobile-bottom-nav" id="p1-bottom-nav">
+            <button class="bottom-nav-item" data-tab="overview" id="bottom-nav-overview">
+                <span class="bottom-nav-icon">📊</span>
+                <span>Overview</span>
+            </button>
+            <button class="bottom-nav-item active" data-tab="tab-upcoming" id="bottom-nav-upcoming">
                 <span class="bottom-nav-icon">🎯</span>
                 <span>Upcoming</span>
                 <span class="bottom-badge" id="bottom-badge-upcoming">0</span>
             </button>
-            <button class="bottom-nav-item" data-tab="tab-positions">
+            <button class="bottom-nav-item" data-tab="tab-positions" id="bottom-nav-positions">
                 <span class="bottom-nav-icon">💼</span>
-                <span>Positions</span>
+                <span>Holdings</span>
                 <span class="bottom-badge" id="bottom-badge-positions">0</span>
             </button>
-            <button class="bottom-nav-item" data-tab="tab-today">
+            <button class="bottom-nav-item" data-tab="tab-today" id="bottom-nav-today">
                 <span class="bottom-nav-icon">⚡</span>
                 <span>Today</span>
                 <span class="bottom-badge" id="bottom-badge-today">0</span>
             </button>
-            <button class="bottom-nav-item" data-tab="tab-trades">
+            <button class="bottom-nav-item" data-tab="tab-trades" id="bottom-nav-trades">
                 <span class="bottom-nav-icon">📜</span>
                 <span>History</span>
-            </button>
-            <button class="bottom-nav-item" data-tab="tab-preview">
-                <span class="bottom-nav-icon">📧</span>
-                <span>Report</span>
             </button>
         </nav>
     </div>

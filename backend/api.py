@@ -25,7 +25,10 @@ from .market_data import get_market_status, simulate_price_update, fetch_indices
 from .sheet_reader import fetch_and_process_sheets, clean_sheet_symbol
 from .mail_reader import parse_email_html_or_text, clean_symbol
 from .trading_engine import run_trading_cycle, manual_close_position
-from .notifier import generate_daily_report_html, send_daily_email_report
+from .notifier import (
+    generate_daily_report_html, generate_p1_daily_report_html, generate_p2_daily_report_html,
+    send_daily_email_report, send_p1_daily_email_report, send_p2_daily_email_report
+)
 from .scheduler import start_scheduler, stop_scheduler
 
 FRONTEND_DIR = BASE_DIR / "frontend"
@@ -259,13 +262,16 @@ def api_simulate_price(data: SimulatePriceInput):
     return {"success": True, "message": f"Simulated price of {data.symbol} set to ₹{data.price}"}
 
 @app.get("/api/actions/preview-daily-report", response_class=HTMLResponse)
-def api_preview_daily_report():
-    subject, html, _ = generate_daily_report_html()
-    return HTMLResponse(content=html)
+def api_preview_daily_report(portfolio: int = 1):
+    if portfolio == 2:
+        subject, html_content, _ = generate_p2_daily_report_html()
+    else:
+        subject, html_content, _ = generate_p1_daily_report_html()
+    return HTMLResponse(content=html_content)
 
 @app.post("/api/actions/send-daily-report")
-def api_send_daily_report():
-    success, msg = send_daily_email_report()
+def api_send_daily_report(portfolio: Optional[int] = None):
+    success, msg = send_daily_email_report(portfolio_id=portfolio)
     return {"success": success, "message": msg}
 
 @app.get("/api/actions/preview-watchlist-report", response_class=HTMLResponse)

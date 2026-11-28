@@ -458,13 +458,13 @@ def manual_close_position(position_id: int) -> bool:
 # PORTFOLIO 2: WYCKOFF SWING DELIVERY TRADING ENGINE (5–10 DAYS)
 # ============================================================================
 
-def execute_p2_buy(candidate: Dict[str, Any], cmp: float, conn: Optional[Any] = None, position_size: float = 20000.0) -> Optional[Dict[str, Any]]:
+def execute_p2_buy(candidate: Dict[str, Any], cmp: float, conn: Optional[Any] = None, position_size: float = 10000.0) -> Optional[Dict[str, Any]]:
     """
     Executes a high-conviction delivery buy for Portfolio 2 based on Wyckoff VSA signals.
-    - Sizing: ₹20,000 per position (5 max for ₹1,00,000 capital)
-    - Stop-Loss: below Spring low / swing support (-3.5% to -5.0%)
-    - Target: Phase E markup (+8% to +14%)
-    - Trailing stop trigger: +5%
+    - Sizing: ₹10,000 per position (10 max for ₹1,00,000 capital)
+    - Stop-Loss: below Spring low / swing support (-3.0% to -4.5%)
+    - Target: Phase E markup (+8% to +12%)
+    - Partial Profit Target: +5% (book 50% and move SL to cost)
     """
     sym = candidate.get("symbol", "")
     stock_name = candidate.get("stock_name") or sym
@@ -484,10 +484,10 @@ def execute_p2_buy(candidate: Dict[str, Any], cmp: float, conn: Optional[Any] = 
         if open_pos:
             return None
 
-        # Check total open positions count in P2
+        # Check total open positions count in P2 (allow up to 10 positions)
         open_count_row = cursor.execute("SELECT COUNT(*) FROM p2_positions WHERE status = 'OPEN'").fetchone()
         open_count = open_count_row[0] if open_count_row else 0
-        if open_count >= 5:
+        if open_count >= 10:
             return None
 
         # Check P2 cash balance
@@ -497,7 +497,7 @@ def execute_p2_buy(candidate: Dict[str, Any], cmp: float, conn: Optional[Any] = 
         cash = float(p2_state["cash_balance"])
 
         alloc = min(position_size, cash)
-        if alloc < 5000 or cmp > alloc:
+        if alloc < 2500 or cmp > alloc:
             return None
 
         quantity = int(alloc // cmp)
@@ -518,11 +518,12 @@ def execute_p2_buy(candidate: Dict[str, Any], cmp: float, conn: Optional[Any] = 
             INSERT INTO p2_positions (
                 p2_watchlist_id, stock_name, symbol, buy_price, quantity, invested_amount,
                 stop_loss, target_price, sl_pct, target_pct, trailing_active, trailing_sl,
-                sessions_held, wyckoff_score, phase_label, current_price, status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 0, ?, ?, ?, 'OPEN')
+                sessions_held, wyckoff_score, phase_label, current_price, status,
+                initial_quantity, partial_exit_done
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 0, ?, ?, ?, 'OPEN', ?, 0)
         """, (
             wl_id, stock_name, sym, cmp, quantity, invested,
-            sl, tgt, sl_pct, tgt_pct, sl, score, phase, cmp
+            sl, tgt, sl_pct, tgt_pct, sl, score, phase, cmp, quantity
         ))
         pos_id = cursor.lastrowid
 
@@ -566,6 +567,94 @@ def execute_p2_buy(candidate: Dict[str, Any], cmp: float, conn: Optional[Any] = 
         if own_conn:
             conn.rollback()
         log_event("ERROR", f"Failed to execute P2 buy for {sym}: {e}", conn=conn if not own_conn else None)
+        return None
+    finally:
+        if own_conn:
+            conn.close()
+
+
+def execute_p2_partial_exit(pos: Dict[str, Any], cmp: float, conn: Optional[Any] = None) -> Optional[Dict[str, Any]]:
+    """
+    Executes a 50% partial profit booking for a Portfolio 2 position when gain reaches +5%.
+    Locks in profit on half the quantity and moves the stop loss of the remaining half to breakeven (entry price).
+    """
+    pos_id = pos["id"]
+    sym = pos["symbol"]
+    stock_name = pos.get("stock_name", sym)
+    buy_price = pos["buy_price"]
+    qty = pos["quantity"]
+
+    if qty < 2:
+        return None
+
+    sell_qty = qty // 2
+    remaining_qty = qty - sell_qty
+    realized_pnl = round((cmp - buy_price) * sell_qty, 2)
+    proceeds = round(cmp * sell_qty, 2)
+    cost_relieved = round(buy_price * sell_qty, 2)
+    new_invested = round(buy_price * remaining_qty, 2)
+
+    own_conn = False
+    if conn is None:
+        conn = get_db()
+        own_conn = True
+
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE p2_positions SET
+                quantity = ?,
+                invested_amount = ?,
+                current_price = ?,
+                trailing_active = 1,
+                trailing_sl = ?,
+                partial_exit_done = 1,
+                realized_pnl = realized_pnl + ?
+            WHERE id = ? AND status = 'OPEN'
+        """, (remaining_qty, new_invested, cmp, buy_price, realized_pnl, pos_id))
+
+        if cursor.rowcount == 0:
+            return None
+
+        # Credit proceeds & update portfolio state
+        cursor.execute("""
+            UPDATE portfolio_state SET
+                cash_balance = cash_balance + ?,
+                realized_pnl = realized_pnl + ?,
+                invested_capital = invested_capital - ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = 2
+        """, (proceeds, realized_pnl, cost_relieved))
+
+        # Log partial sell to p2_trades
+        cursor.execute("""
+            INSERT INTO p2_trades (
+                position_id, symbol, stock_name, trade_type, price,
+                quantity, total_value, pnl, exit_reason
+            ) VALUES (?, ?, ?, 'SELL', ?, ?, ?, ?, 'PARTIAL_TARGET_5PCT')
+        """, (pos_id, sym, stock_name, cmp, sell_qty, proceeds, realized_pnl))
+
+        if own_conn:
+            conn.commit()
+
+        trade_info = {
+            "position_id": pos_id, "symbol": sym, "stock_name": stock_name,
+            "price": cmp, "buy_price": buy_price, "quantity": sell_qty,
+            "remaining_quantity": remaining_qty, "pnl": realized_pnl,
+            "proceeds": proceeds, "exit_reason": "PARTIAL_TARGET_5PCT"
+        }
+        log_event("TRADE", f"🌊 [P2 PARTIAL EXIT] {sym} booked 50% ({sell_qty} shares) @ ₹{cmp:.2f} (+{((cmp-buy_price)/buy_price)*100:.1f}%): P&L +₹{realized_pnl:.2f}. SL moved to breakeven ₹{buy_price:.2f}", conn=conn)
+
+        try:
+            notify_p2_sell(trade_info)
+        except Exception as e:
+            print(f"[!] Warning sending P2 partial sell notification: {e}")
+
+        return trade_info
+    except Exception as e:
+        if own_conn:
+            conn.rollback()
+        log_event("ERROR", f"Failed to execute P2 partial exit for {sym}: {e}", conn=conn if not own_conn else None)
         return None
     finally:
         if own_conn:
@@ -665,15 +754,16 @@ def manual_close_p2_position(position_id: int) -> bool:
         return not res.get("already_closed") and "error" not in res
 
 
-def run_p2_trading_cycle(force_market_open: bool = False, max_positions: int = 5, position_size: float = 20000.0, auto_buy: bool = True) -> Dict[str, Any]:
+def run_p2_trading_cycle(force_market_open: bool = False, max_positions: int = 10, position_size: float = 10000.0, auto_buy: bool = True) -> Dict[str, Any]:
     """
     Executes a Portfolio 2 Wyckoff Swing Delivery cycle:
     1. Checks exits on active open positions (Target, Stop-Loss, Trailing Stop, Time-Stop).
-    2. Updates Trailing Stop triggers for winning positions (+5% profit activates breakeven/trail).
+    2. Partial profit taking: at +5% gain, books 50% profit and moves SL of remainder to cost.
     3. If auto_buy is True, automatically buys ONLY when a candidate hits its Confirmed Breakout Trigger:
-       RULE: cmp >= trigger_price AND cmp <= trigger_price * 1.025 (no premature entries, no chasing).
+       RULE: Wyckoff Score >= 70, cmp >= trigger_price AND cmp <= trigger_price * 1.025.
        If cmp < trigger_price, capital is safely preserved in cash ("money left in hand is ok").
-    4. Updates database, snapshots, and alerts.
+    4. Time-Stop: Exits stagnant positions held >= 7 sessions without markup.
+    5. Updates database, snapshots, and alerts.
     """
     if not force_market_open and not is_market_open():
         return {
@@ -704,6 +794,7 @@ def run_p2_trading_cycle(force_market_open: bool = False, max_positions: int = 5
             trailing_active = bool(pos["trailing_active"])
             trailing_sl = pos["trailing_sl"] if pos["trailing_sl"] > 0 else stop_loss
             sessions = pos.get("sessions_held", 0)
+            partial_exit_done = bool(pos.get("partial_exit_done", 0))
 
             # Update live CMP
             conn.execute(
@@ -711,9 +802,23 @@ def run_p2_trading_cycle(force_market_open: bool = False, max_positions: int = 5
                 (cmp, round((cmp - buy_price) * pos["quantity"], 2), pos["id"])
             )
 
-            # Check Trailing Stop Activation (+5% gain)
             gain_pct = ((cmp - buy_price) / buy_price) * 100 if buy_price > 0 else 0.0
-            if gain_pct >= 5.0 and not trailing_active:
+
+            # Partial Profit Booking Rule:
+            # At +5.0% gain, book 50% profit immediately and shift SL to entry price
+            if gain_pct >= 5.0 and not partial_exit_done and pos["quantity"] >= 2:
+                part_res = execute_p2_partial_exit(pos, cmp, conn=conn)
+                if part_res:
+                    targets_hit.append(part_res)
+                    trailing_active = True
+                    trailing_sl = buy_price
+                    pos["quantity"] = part_res["remaining_quantity"]
+                    pos["trailing_active"] = 1
+                    pos["trailing_sl"] = buy_price
+                    pos["partial_exit_done"] = 1
+
+            # Check Trailing Stop Activation (+5% gain without partial exit)
+            elif gain_pct >= 5.0 and not trailing_active:
                 trailing_active = True
                 trailing_sl = max(stop_loss, buy_price)  # move to breakeven
                 conn.execute(
@@ -732,7 +837,7 @@ def run_p2_trading_cycle(force_market_open: bool = False, max_positions: int = 5
 
             effective_sl = trailing_sl if trailing_active else stop_loss
 
-            # Check Exits: Target Hit
+            # Check Exits: Target Hit (Runner target reached)
             if cmp >= target_price:
                 res = execute_p2_sell(pos, cmp, exit_reason="TARGET_HIT", conn=conn)
                 targets_hit.append(res)
@@ -745,8 +850,8 @@ def run_p2_trading_cycle(force_market_open: bool = False, max_positions: int = 5
                 stop_losses_hit.append(res)
                 continue
 
-            # Check Exits: Time Stop (10 trading sessions without reaching target or SL)
-            if sessions >= 10:
+            # Check Exits: Stagnant Time Stop (7 trading sessions without reaching target or SL)
+            if sessions >= 7:
                 res = execute_p2_sell(pos, cmp, exit_reason="TIME_STOP", conn=conn)
                 stop_losses_hit.append(res)
                 continue
@@ -792,7 +897,7 @@ def run_p2_trading_cycle(force_market_open: bool = False, max_positions: int = 5
                     continue
 
                 score = float(cand.get("wyckoff_score") or 0.0)
-                if score < 60:
+                if score < 70:  # Strict minimum score of 70 for swing entry
                     continue
 
                 # STRICT BREAKOUT CONFIRMATION RULE:
@@ -830,7 +935,7 @@ def run_p2_trading_cycle(force_market_open: bool = False, max_positions: int = 5
     return summary
 
 
-def execute_p2_buy_confirmed(symbol: str, position_size: float = 20000.0) -> Optional[Dict[str, Any]]:
+def execute_p2_buy_confirmed(symbol: str, position_size: float = 10000.0) -> Optional[Dict[str, Any]]:
     """
     Executes a buy for a specific Wyckoff candidate AFTER explicit user confirmation.
     Returns the trade dictionary if successful, or None with log.

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Smart Money Wyckoff Swing Delivery - Portfolio 2</title>
     <meta name="description" content="Portfolio 2: Wyckoff Swing Delivery Trading Terminal (5–10 days holding, 20% target, 5% stop-loss, breakout confirmation).">
     
@@ -216,6 +216,9 @@
                     </button>
                 </div>
                 <div class="tab-actions">
+                    <button class="btn btn-sm btn-primary" id="btn-p2-send-email" title="Send Portfolio 2 Daily Email Report to Inbox" style="background: linear-gradient(135deg, #7c3aed, #a855f7); border: none; color: #fff; font-weight: 600;">
+                        📧 Send P2 Email
+                    </button>
                     <button class="btn btn-sm btn-outline text-danger" id="btn-reset-p2" title="Reset Portfolio 2 to initial ₹1,00,000 cash">
                         Reset P2
                     </button>
@@ -418,24 +421,28 @@
         </main>
 
         <!-- Mobile Sticky Bottom Navigation Bar -->
-        <nav class="mobile-bottom-nav">
-            <button class="bottom-nav-item active" data-tab="tab-watchlist">
+        <nav class="mobile-bottom-nav" id="p2-bottom-nav">
+            <button class="bottom-nav-item" data-tab="overview" id="p2-bottom-nav-overview">
+                <span class="bottom-nav-icon">📊</span>
+                <span>Overview</span>
+            </button>
+            <button class="bottom-nav-item active" data-tab="tab-watchlist" id="p2-bottom-nav-watchlist">
                 <span class="bottom-nav-icon">🌊</span>
                 <span>Upcoming</span>
                 <span class="bottom-badge" id="bottom-badge-watchlist">0</span>
             </button>
-            <button class="bottom-nav-item" data-tab="tab-positions">
+            <button class="bottom-nav-item" data-tab="tab-positions" id="p2-bottom-nav-positions">
                 <span class="bottom-nav-icon">💼</span>
                 <span>Holdings</span>
                 <span class="bottom-badge" id="bottom-badge-positions">0</span>
             </button>
-            <button class="bottom-nav-item" data-tab="tab-trades">
+            <button class="bottom-nav-item" data-tab="tab-trades" id="p2-bottom-nav-trades">
                 <span class="bottom-nav-icon">📜</span>
                 <span>History</span>
                 <span class="bottom-badge" id="bottom-badge-trades">0</span>
             </button>
-            <button class="bottom-nav-item" data-tab="tab-strategy">
-                <span class="bottom-nav-icon">📊</span>
+            <button class="bottom-nav-item" data-tab="tab-strategy" id="p2-bottom-nav-strategy">
+                <span class="bottom-nav-icon">📐</span>
                 <span>Rules</span>
             </button>
         </nav>

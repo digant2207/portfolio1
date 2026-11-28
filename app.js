@@ -131,7 +131,7 @@ const el = {
 };
 
 // Initialization
-document.addEventListener("DOMContentLoaded", () => {
+function bootApp() {
     initTabs();
     initBottomNav();
     initFilters();
@@ -145,7 +145,13 @@ document.addEventListener("DOMContentLoaded", () => {
     // Timers
     setInterval(updateClock, 1000);
     setInterval(refreshAllData, 25000);
-});
+}
+
+if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", bootApp);
+} else {
+    bootApp();
+}
 
 // Toast notification helper
 function showToast(message, type = "info") {
@@ -174,44 +180,81 @@ function updateClock() {
 }
 
 // Tab navigation handling
-function switchTab(tabId) {
+function switchTab(tabId, shouldScroll = false) {
     if (!tabId) return;
 
-    el.tabLinks.forEach(t =>
+    if (tabId === "overview") {
+        document.querySelectorAll(".bottom-nav-item").forEach(b =>
+            b.classList.toggle("active", b.getAttribute("data-tab") === "overview")
+        );
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+    }
+
+    const tabLinks = document.querySelectorAll(".tab-link");
+    const tabPanes = document.querySelectorAll(".tab-pane");
+    const bottomNavItems = document.querySelectorAll(".bottom-nav-item");
+
+    tabLinks.forEach(t =>
         t.classList.toggle("active", t.getAttribute("data-tab") === tabId)
     );
-    el.tabPanes.forEach(p => {
+    tabPanes.forEach(p => {
         const isActive = (p.id === tabId);
         p.style.display = isActive ? "block" : "none";
         p.classList.toggle("active", isActive);
     });
-    el.bottomNavItems.forEach(b =>
+    bottomNavItems.forEach(b =>
         b.classList.toggle("active", b.getAttribute("data-tab") === tabId)
     );
 
     if (tabId === "tab-preview") {
         loadEmailPreview();
     }
+
+    if (shouldScroll) {
+        scrollToTabContent(tabId);
+    }
+}
+
+function scrollToTabContent(tabId) {
+    const targetPane = document.getElementById(tabId);
+    if (!targetPane) return;
+
+    // Position tab content directly below sticky header
+    const topNav = document.getElementById("top-nav-bar");
+    const topOffset = (topNav ? topNav.offsetHeight : 56) + 10;
+    const paneRect = targetPane.getBoundingClientRect();
+    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+    const targetY = paneRect.top + scrollTop - topOffset;
+
+    window.scrollTo({
+        top: Math.max(0, targetY),
+        behavior: "smooth"
+    });
 }
 
 function initTabs() {
     document.querySelectorAll(".tab-link").forEach(tab => {
         tab.addEventListener("click", () => {
             const tabId = tab.getAttribute("data-tab");
-            if (tabId) switchTab(tabId);
+            if (tabId) switchTab(tabId, false);
         });
     });
 }
 
 function initBottomNav() {
-    document.querySelectorAll(".bottom-nav-item[data-tab]").forEach(item => {
-        item.addEventListener("click", () => {
+    document.querySelectorAll(".bottom-nav-item").forEach(item => {
+        const handleNav = (e) => {
+            if (e.type === "touchend") {
+                e.preventDefault(); // Prevent duplicate click event
+            }
             const tabId = item.getAttribute("data-tab");
             if (tabId) {
-                switchTab(tabId);
-                window.scrollTo({ top: 0, behavior: "smooth" });
+                switchTab(tabId, true);
             }
-        });
+        };
+        item.addEventListener("click", handleNav);
+        item.addEventListener("touchend", handleNav, { passive: false });
     });
 }
 
@@ -1377,7 +1420,7 @@ function initActionButtons() {
             try {
                 el.btnSendEmailNow.disabled = true;
                 el.btnSendEmailNow.textContent = "Sending Email...";
-                const res = await fetch(`${API_BASE}/api/actions/send-daily-report`, { method: "POST" });
+                const res = await fetch(`${API_BASE}/api/actions/send-daily-report?portfolio=1`, { method: "POST" });
                 const data = await res.json();
                 showToast(data.message, data.success ? "success" : "error");
             } catch (e) {
@@ -1388,6 +1431,12 @@ function initActionButtons() {
             }
         });
     }
+
+function loadEmailPreview() {
+    if (el.emailPreviewIframe) {
+        el.emailPreviewIframe.src = `${API_BASE}/api/actions/preview-daily-report?portfolio=1`;
+    }
+}
 
     if (el.btnResetPortfolio) {
         el.btnResetPortfolio.addEventListener("click", async () => {

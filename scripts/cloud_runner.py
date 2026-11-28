@@ -62,7 +62,7 @@ def main():
         print(f"Result: Portfolio snapshot exported with {len(snap.get('upcoming_trades', []))} upcoming trades.")
 
     elif args.task in ("daily-report", "evening-report", "evening-watchlist"):
-        print("[*] Executing Cloud Task: daily-report (Unified 6:30 PM Email & Telegram Report)")
+        print("[*] Executing Cloud Task: daily-report (Separate P1 & P2 6:30 PM Email & Telegram Reports)")
         try:
             fetch_and_process_sheets()
         except Exception as e:
@@ -71,13 +71,37 @@ def main():
         from backend.database import is_notification_sent, record_notification_sent
         from datetime import datetime
         today_str = datetime.now().strftime("%Y-%m-%d")
-        if is_notification_sent(today_str, "DAILY_REPORT_630"):
-            print(f"[i] Daily 6:30 PM report for {today_str} already sent today. Skipping duplicate.")
+
+        # 1. Send Portfolio 1 Daily Report Email
+        from backend.notifier import send_p1_daily_email_report, send_p2_daily_email_report, notify_daily_summary_telegram
+        if is_notification_sent(today_str, "DAILY_REPORT_P1_630"):
+            print(f"[i] Portfolio 1 daily report for {today_str} already sent today. Skipping duplicate.")
         else:
-            success, msg = send_daily_email_report()
-            if success:
-                record_notification_sent(today_str, "DAILY_REPORT_630", msg)
-        # Send dedicated Evening Top 10 Wyckoff candidates Telegram digest
+            s1, m1 = send_p1_daily_email_report()
+            print(f"[+] Portfolio 1 email result: {m1}")
+            if s1:
+                record_notification_sent(today_str, "DAILY_REPORT_P1_630", m1)
+
+        # 2. Send Portfolio 2 Daily Report Email
+        if is_notification_sent(today_str, "DAILY_REPORT_P2_630"):
+            print(f"[i] Portfolio 2 daily report for {today_str} already sent today. Skipping duplicate.")
+        else:
+            s2, m2 = send_p2_daily_email_report()
+            print(f"[+] Portfolio 2 email result: {m2}")
+            if s2:
+                record_notification_sent(today_str, "DAILY_REPORT_P2_630", m2)
+
+        # 3. Send Telegram Daily Summary Alert
+        try:
+            from backend.database import get_portfolio_summary, get_today_trades, get_nearest_breakout_candidates
+            summary = get_portfolio_summary()
+            breakout_candidates = get_nearest_breakout_candidates(limit=5)
+            today_trades = get_today_trades()
+            notify_daily_summary_telegram(summary, today_trades, breakout_candidates)
+        except Exception as tg_e:
+            print(f"[!] Warning sending Telegram daily summary: {tg_e}")
+
+        # 4. Send dedicated Evening Top 10 Wyckoff candidates Telegram digest
         try:
             from backend.notifier import send_evening_p2_wyckoff_top10
             send_evening_p2_wyckoff_top10()

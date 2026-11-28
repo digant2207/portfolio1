@@ -39,15 +39,15 @@ LOOKBACK_DAYS: int = 60          # How many trading days of history to analyse
 RANGE_WINDOW: int = 30           # Days used to detect the accumulation range
 SOS_VOLUME_MULTIPLIER: float = 1.5  # Phase D: volume must be >= 1.5x 20-day avg
 SPRING_RECOVERY_BARS: int = 3    # Max bars allowed between dip & recovery
-MIN_WYCKOFF_SCORE: int = 60      # Minimum score to pass screening
+MIN_WYCKOFF_SCORE: int = 70      # Upgraded conviction gate (was 60, now 70)
 
 # Portfolio 2 risk parameters
-SL_PCT_LOW: float = 3.5          # Minimum stop-loss distance (%)
-SL_PCT_HIGH: float = 5.0         # Maximum stop-loss distance (%)
-TARGET_PCT_LOW: float = 8.0      # Minimum profit target (%)
-TARGET_PCT_HIGH: float = 14.0    # Maximum profit target (%)
+SL_PCT_LOW: float = 3.0          # Minimum stop-loss distance (%)
+SL_PCT_HIGH: float = 4.5         # Maximum stop-loss distance (%)
+TARGET_PCT_LOW: float = 5.0      # First target (Partial profit booking trigger %)
+TARGET_PCT_HIGH: float = 12.0    # Final runner profit target (%)
 TRAILING_TRIGGER_PCT: float = 5.0  # Move SL to breakeven once gain hits this %
-TIME_STOP_SESSIONS: int = 10     # Exit after N trading sessions regardless
+TIME_STOP_SESSIONS: int = 7      # Exit after 7 sessions if stagnant (was 10)
 
 
 # ---------------------------------------------------------------------------
